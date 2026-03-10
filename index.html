@@ -3,21 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CV & Carte de Visite - Belaggoun Hebatallah</title>
+    <title>Profil Professionnel - Belaggoun Hebatallah</title>
     <!-- استدعاء مكتبات التصميم -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <!-- مكتبة QR Code -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <style>
-        /* إعدادات حركة البطاقة (التصميم التفاعلي) */
+        /* تأثير الطفو الأنيق للبطاقة */
+        .floating {
+            animation: floating 3s ease-in-out infinite;
+        }
+        @keyframes floating {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* إعدادات البطاقة التفاعلية - تم تعديل الارتفاع لحل مشكلة التداخل */
         .flip-card {
             background-color: transparent;
             width: 100%;
-            max-width: 450px;
-            height: 250px;
+            max-width: 400px; 
+            height: 280px; /* تم زيادة الارتفاع ليتسع الكود براحة */
             perspective: 1000px;
             cursor: pointer;
             margin: 0 auto;
@@ -28,10 +37,10 @@
             width: 100%;
             height: 100%;
             text-align: center;
-            transition: transform 0.6s;
+            transition: transform 0.7s cubic-bezier(0.4, 0.2, 0.2, 1);
             transform-style: preserve-3d;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-radius: 1rem;
         }
 
         .flip-card.flipped .flip-card-inner {
@@ -44,113 +53,173 @@
             height: 100%;
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
-            border-radius: 0.75rem;
+            border-radius: 1rem;
             overflow: hidden;
         }
 
+        /* تصميم الوجه الأمامي */
         .flip-card-front {
-            background-color: white;
+            background: linear-gradient(145deg, #ffffff, #f3f4f6);
             color: black;
+            display: flex;
+            flex-direction: column;
         }
 
+        /* تصميم الوجه الخلفي */
         .flip-card-back {
-            background-color: #f0fdfa; /* لون خلفية الوجه الخلفي */
+            background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
             color: black;
             transform: rotateY(180deg);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border: 2px solid #0d9488;
+            border: 2px solid rgba(13, 148, 136, 0.3);
+            padding: 1rem;
         }
 
         /* تلميح النقر */
         .click-hint {
-            animation: bounce 2s infinite;
+            animation: pulse-hint 2s infinite;
         }
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-            40% { transform: translateY(-10px); }
-            60% { transform: translateY(-5px); }
+        @keyframes pulse-hint {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.95); }
+        }
+
+        /* إضافة حركة اللمعان للزر */
+        @keyframes shimmer {
+            100% { transform: translateX(100%); }
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4 font-sans text-gray-800">
+<body class="bg-gradient-to-br from-gray-50 via-teal-50 to-gray-100 min-h-screen flex flex-col justify-between font-sans text-gray-800 selection:bg-teal-300 selection:text-teal-900">
 
-    <!-- القسم الرئيسي: البطاقة وزر التحميل -->
-    <div class="w-full max-w-4xl flex flex-col items-center">
+    <!-- القسم الرئيسي -->
+    <div class="flex-grow flex flex-col items-center justify-center p-4 w-full max-w-lg mx-auto">
         
         <!-- العنوان -->
-        <div class="mb-6 text-center flex-col items-center">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">Mon Profil Professionnel</h1>
-            <p class="text-sm text-gray-500 click-hint"><i class="fa-solid fa-hand-pointer mr-2"></i>Cliquez sur la carte pour la retourner</p>
+        <div class="mb-8 text-center mt-4">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-700 to-teal-500 mb-2 drop-shadow-sm">
+                Carte Digitale
+            </h1>
+            <p class="text-sm font-medium text-teal-600/80 click-hint bg-teal-100/50 inline-block px-4 py-1.5 rounded-full border border-teal-200">
+                <i class="fa-solid fa-arrows-rotate mr-2"></i>Touchez pour retourner
+            </p>
         </div>
 
-        <!-- حاوية البطاقة -->
-        <div class="flip-card" id="myCard" onclick="toggleFlip()">
-            <div class="flip-card-inner" id="cardInner">
-                
-                <!-- الوجه الأمامي -->
-                <div class="flip-card-front flex flex-col justify-between" id="cardFront">
-                    <div class="bg-teal-600 text-white p-5 text-left h-2/5 flex flex-col justify-center">
-                        <h2 class="text-2xl font-bold tracking-wide">Belaggoun Hebatallah</h2>
-                        <p class="text-teal-100 font-medium mt-1 uppercase text-xs tracking-widest"><i class="fa-solid fa-staff-snake mr-2"></i>Vendeuse & Assistante en Pharmacie</p>
-                    </div>
+        <!-- حاوية البطاقة مع تأثير الطفو -->
+        <div class="floating w-full z-10">
+            <div class="flip-card" id="myCard" onclick="toggleFlip()">
+                <div class="flip-card-inner">
                     
-                    <div class="bg-white p-5 text-left h-3/5 flex flex-col justify-center space-y-3">
-                        <div class="flex items-center text-sm text-gray-700">
-                            <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center mr-3 shrink-0">
-                                <i class="fa-solid fa-phone"></i>
+                    <!-- === الوجه الأمامي === -->
+                    <div class="flip-card-front">
+                        <!-- القسم العلوي الملون -->
+                        <div class="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6 text-left h-2/5 flex items-center relative overflow-hidden">
+                            <!-- العلامة المائية (شعار الصيدلة) -->
+                            <i class="fa-solid fa-staff-snake absolute -right-4 -bottom-6 text-8xl opacity-10 transform -rotate-12"></i>
+                            
+                            <!-- صورة شخصية أو أيقونة -->
+                            <div class="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm border-2 border-white/50 flex items-center justify-center mr-4 z-10 shadow-inner">
+                                <i class="fa-solid fa-user-nurse text-2xl text-white"></i>
                             </div>
-                            <span>(213) 0563 54 50 16</span>
+                            
+                            <div class="z-10">
+                                <h2 class="text-xl font-bold tracking-tight">Belaggoun Hebatallah</h2>
+                                <p class="text-teal-50 font-medium mt-0.5 text-[11px] uppercase tracking-widest">Vendeuse en Pharmacie</p>
+                            </div>
                         </div>
-                        <div class="flex items-center text-sm text-gray-700">
-                            <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center mr-3 shrink-0">
-                                <i class="fa-solid fa-envelope"></i>
+                        
+                        <!-- معلومات الاتصال -->
+                        <div class="p-6 text-left h-3/5 flex flex-col justify-center space-y-4">
+                            <div class="flex items-center text-sm text-gray-700 group">
+                                <div class="w-9 h-9 rounded-full bg-teal-50 group-hover:bg-teal-100 text-teal-600 flex items-center justify-center mr-4 shrink-0 transition-colors shadow-sm border border-teal-100">
+                                    <i class="fa-solid fa-phone"></i>
+                                </div>
+                                <span class="font-medium">+213 563 54 50 16</span>
                             </div>
-                            <span class="truncate">hibatallahbelaggoun@gmail.com</span>
-                        </div>
-                        <div class="flex items-center text-sm text-gray-700">
-                            <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center mr-3 shrink-0">
-                                <i class="fa-solid fa-location-dot"></i>
+                            <div class="flex items-center text-sm text-gray-700 group">
+                                <div class="w-9 h-9 rounded-full bg-teal-50 group-hover:bg-teal-100 text-teal-600 flex items-center justify-center mr-4 shrink-0 transition-colors shadow-sm border border-teal-100">
+                                    <i class="fa-solid fa-envelope"></i>
+                                </div>
+                                <span class="truncate font-medium">hibatallahbelaggoun@gmail.com</span>
                             </div>
-                            <span>Hai Mohamed Boudiaf, Es Sénia, Oran</span>
+                            <div class="flex items-center text-sm text-gray-700 group">
+                                <div class="w-9 h-9 rounded-full bg-teal-50 group-hover:bg-teal-100 text-teal-600 flex items-center justify-center mr-4 shrink-0 transition-colors shadow-sm border border-teal-100">
+                                    <i class="fa-solid fa-location-dot"></i>
+                                </div>
+                                <span class="font-medium text-xs sm:text-sm">Es Sénia, Oran, Algérie</span>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- الوجه الخلفي -->
-                <div class="flip-card-back p-4 relative" id="cardBack">
-                    <!-- شريط علوي للزينة -->
-                    <div class="absolute top-0 left-0 w-full h-2 bg-teal-600"></div>
-                    
-                    <h3 class="text-lg font-bold text-teal-800 mb-1">Mon CV Complet</h3>
-                    <p class="text-xs text-gray-600 mb-3">Scannez ce code pour visualiser mon parcours</p>
-                    
-                    <!-- حاوية كود QR -->
-                    <div class="bg-white p-2 rounded-lg shadow-sm border border-gray-200" id="qrcode"></div>
-                    
-                    <!-- المهارات -->
-                    <div class="mt-3 flex flex-wrap justify-center gap-1.5">
-                        <span class="bg-teal-100 text-teal-800 text-[10px] px-2 py-1 rounded-full font-semibold">Logiciel CHIFA</span>
-                        <span class="bg-teal-100 text-teal-800 text-[10px] px-2 py-1 rounded-full font-semibold">Gestion de Stock</span>
-                        <span class="bg-teal-100 text-teal-800 text-[10px] px-2 py-1 rounded-full font-semibold">Conseil Client</span>
+                    <!-- === الوجه الخلفي (تم التعديل لتجنب التداخل) === -->
+                    <div class="flip-card-back relative">
+                        <!-- شريط علوي -->
+                        <div class="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-teal-500 to-teal-400"></div>
+                        
+                        <!-- نصوص متمركزة -->
+                        <h3 class="text-lg font-extrabold text-teal-800 mt-2 mb-1">Mon CV Complet</h3>
+                        <p class="text-[11px] text-gray-500 mb-3 font-medium px-4">Scannez ce QR Code pour consulter mon parcours.</p>
+                        
+                        <!-- حاوية كود QR -->
+                        <div class="bg-white p-2 rounded-xl shadow-md border border-teal-100 transform hover:scale-105 transition-transform" id="qrcode"></div>
+                        
+                        <!-- المهارات -->
+                        <div class="mt-4 flex flex-wrap justify-center gap-2">
+                            <span class="bg-teal-600/10 text-teal-700 text-[10px] px-2.5 py-1.5 rounded-md font-bold border border-teal-600/20">CHIFA</span>
+                            <span class="bg-teal-600/10 text-teal-700 text-[10px] px-2.5 py-1.5 rounded-md font-bold border border-teal-600/20">Stock</span>
+                            <span class="bg-teal-600/10 text-teal-700 text-[10px] px-2.5 py-1.5 rounded-md font-bold border border-teal-600/20">Biologie</span>
+                        </div>
                     </div>
-                </div>
 
+                </div>
             </div>
         </div>
 
+        <!-- أزرار التواصل السريع -->
+        <div class="flex justify-center gap-5 mt-8 mb-4 w-full">
+            <!-- اتصال -->
+            <a href="tel:+2130563545016" class="flex flex-col items-center group">
+                <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-teal-600 shadow-md group-hover:bg-teal-600 group-hover:text-white group-hover:-translate-y-1 transition-all duration-300">
+                    <i class="fa-solid fa-phone text-xl"></i>
+                </div>
+                <span class="text-[10px] font-bold text-gray-500 mt-2 uppercase">Appeler</span>
+            </a>
+            <!-- واتساب -->
+            <a href="https://wa.me/213563545016" target="_blank" class="flex flex-col items-center group">
+                <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-green-500 shadow-md group-hover:bg-green-500 group-hover:text-white group-hover:-translate-y-1 transition-all duration-300">
+                    <i class="fa-brands fa-whatsapp text-2xl"></i>
+                </div>
+                <span class="text-[10px] font-bold text-gray-500 mt-2 uppercase">WhatsApp</span>
+            </a>
+            <!-- إيميل -->
+            <a href="mailto:hibatallahbelaggoun@gmail.com" class="flex flex-col items-center group">
+                <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-rose-500 shadow-md group-hover:bg-rose-500 group-hover:text-white group-hover:-translate-y-1 transition-all duration-300">
+                    <i class="fa-solid fa-envelope text-xl"></i>
+                </div>
+                <span class="text-[10px] font-bold text-gray-500 mt-2 uppercase">Email</span>
+            </a>
+        </div>
+
         <!-- زر تحميل الـ PDF المباشر -->
-        <div class="mt-10 mb-8">
+        <div class="mt-4 w-full z-10">
             <a href="https://drive.google.com/file/d/1Iy0Ltcx4wJfwMaulMGkKm1RJ45MAQzoT/view?usp=drivesdk" target="_blank" 
-               class="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-full text-lg font-bold shadow-lg transition-transform transform hover:scale-105 flex items-center justify-center">
-                <i class="fa-solid fa-file-pdf mr-3 text-xl"></i>
-                Télécharger Mon CV (تحميل السيرة الذاتية)
+               class="group relative w-full flex justify-center py-4 px-4 border border-transparent text-sm font-bold rounded-xl text-white bg-teal-700 hover:bg-teal-800 focus:outline-none shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 overflow-hidden">
+                <div class="absolute inset-0 w-full h-full -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                <i class="fa-solid fa-download mr-2 text-lg"></i>
+                Télécharger Mon CV (PDF)
             </a>
         </div>
         
     </div>
+
+    <!-- التذييل الاحترافي (Footer) -->
+    <footer class="w-full text-center py-6 text-xs text-gray-400 font-medium">
+        <p>© 2026 Belaggoun Hebatallah.</p>
+        <p class="mt-1">Étudiante en Biologie & Assistante en Pharmacie.</p>
+    </footer>
 
     <script>
         // دالة لقلب البطاقة عند النقر
@@ -158,13 +227,13 @@
             document.getElementById('myCard').classList.toggle('flipped');
         }
 
-        // إنشاء كود QR برابط Google Drive الخاص بك
+        // إنشاء كود QR برابط Google Drive الخاص بك - تم تعديل الأبعاد لتلائم التصميم
         const cvLink = "https://drive.google.com/file/d/1Iy0Ltcx4wJfwMaulMGkKm1RJ45MAQzoT/view?usp=drivesdk"; 
         new QRCode(document.getElementById("qrcode"), {
             text: cvLink,
-            width: 100,
-            height: 100,
-            colorDark : "#0f766e",
+            width: 90, /* تصغير طفيف لتفادي التداخل */
+            height: 90, 
+            colorDark : "#0f766e", 
             colorLight : "#ffffff",
             correctLevel : QRCode.CorrectLevel.H
         });
