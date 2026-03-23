@@ -1,149 +1,275 @@
-import React, { useState, useEffect } from 'react';
-
-// =========================================================================
-// 🚀 إعدادات FIREBASE (قاعدة البيانات السحابية)
-// =========================================================================
-/* // 1. قم بتثبيت مكتبة فايربيس في مشروعك: npm install firebase
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
 
-const firebaseConfig = {
-  apiKey: "ضعي_مفتاح_API_الخاص_بك_هنا",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef123456"
+// =========================================================================
+// 🚀 إعدادات FIREBASE
+// =========================================================================
+const VERCEL_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBz4aIYj6ybHcC1oSjwEmH5Aongfg8CIgI",
+  authDomain: "knotique-71e97.firebaseapp.com",
+  projectId: "knotique-71e97",
+  storageBucket: "knotique-71e97.firebasestorage.app",
+  messagingSenderId: "784482364030",
+  appId: "1:784482364030:web:7a1187b371a4dc71ca462f",
+  measurementId: "G-ZQLXBNTQQJ"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app); 
+let app, auth, db, appId;
+let isFirebaseActive = false;
 
-// --- دوال جاهزة لحفظ الطلبات في فايربيس ---
-const saveOrderToFirebase = async (orderData) => {
-  try {
-    const docRef = await addDoc(collection(db, "orders"), orderData);
-    console.log("Document written with ID: ", docRef.id);
-    return true;
-  } catch (e) {
-    console.error("Error adding document: ", e);
-    return false;
+try {
+  if (typeof __firebase_config !== 'undefined') {
+    const firebaseConfig = JSON.parse(__firebase_config);
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    isFirebaseActive = true;
+  } else if (VERCEL_FIREBASE_CONFIG.apiKey !== "") {
+    app = initializeApp(VERCEL_FIREBASE_CONFIG);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    appId = "vercel-production";
+    isFirebaseActive = true;
   }
+} catch (e) {
+  console.error("Firebase Init Error:", e);
+}
+
+const getColRef = (colName) => {
+  if (typeof __firebase_config !== 'undefined') {
+    return collection(db, 'artifacts', appId, 'public', 'data', colName);
+  }
+  return collection(db, colName);
 };
-*/
+
 // =========================================================================
 
+// --- الشعار ---
+const CrochetLogo = ({ className }) => (
+  <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <path d="M50 85C50 85 15 55 15 35C15 20 30 10 50 25C70 10 85 20 85 35C85 55 50 85 50 85Z" fill="#FFF5F5" />
+    <circle cx="45" cy="55" r="18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray="6 4" />
+    <path d="M35 70 C 25 80, 40 90, 20 95" stroke="currentColor" strokeWidth="3" strokeLinecap="round" fill="none" />
+    <path d="M30 30 L 75 75" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+    <path d="M75 75 C 80 80, 85 70, 80 65 L 75 75" fill="currentColor" />
+    <path d="M25 25 L 35 35" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+  </svg>
+);
 
-// --- الألوان المتغيرة بناءً على التصميم المرفق ---
 const colors = {
-  primary: '#44674d',
-  primaryContainer: '#c5eccc',
-  secondary: '#7e572e',
-  secondaryContainer: '#ffdcbd',
-  tertiary: '#7f535c',
-  tertiaryContainer: '#fcc3ce',
-  background: '#fdf8f5',
-  surface: '#fdf8f5',
-  surfaceLow: '#f8f3ef',
-  surfaceHigh: '#ece7e3',
-  surfaceHighest: '#e7e2dd',
-  onSurface: '#34322f',
-  onSurfaceVariant: '#615f5b',
-  white: '#ffffff'
+  primary: '#44674d', primaryContainer: '#c5eccc',
+  secondary: '#7e572e', secondaryContainer: '#ffdcbd',
+  tertiary: '#7f535c', tertiaryContainer: '#fcc3ce',
+  background: '#fdf8f5', surface: '#fdf8f5', surfaceLow: '#f8f3ef',
+  surfaceHigh: '#ece7e3', surfaceHighest: '#e7e2dd',
+  onSurface: '#34322f', onSurfaceVariant: '#615f5b', white: '#ffffff'
 };
 
-// === البيانات الافتراضية ===
 const defaultData = {
   categories: [
-    { id: 'amigurumi', name: 'الأميغورومي', desc: 'دمى محشوة يدوياً تفيض باللطف', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDbTxQiXXo8BTfZLacMPEuypIjchKECBjimG760R9-k9kHrNt7omcupi9FZ5ahCf4m3nt7thcdVIzYpFy-B-gwd0ZKYpMfrCNDFOjGMDabhSyqUGfNFFq3tocWKM5JNwNXByn_cEYluS29LQ32a7KwwDTxdU3NkCSkKAheH_LX5noG-3fP5ceF1Df_zIzqSEaWxQuQdQdheoyPMMtjmAVPvcN9AjtAqKsK83SWh3sQleEnjpDcKAkfJ0JgvVD1XoZA8O_lOetdkXmIk' },
-    { id: 'accessories', name: 'الإكسسوارات', desc: 'أناقة يومية', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBfG0_KcF5x0xuJ-Y6MgLPD6byJ4yxZ5-TrXb-sDMqHvHLSo5mbW9hifFYTZjrVdCNdR1-dWt8YAdq_7O6ZVRr3-8oY7UF37gd1zp07CY2cWCejMxbvMOmnyfVxfIo48_0FwKWGky4eVqqidVH0k2vbtnNZKh7cBqYZYaTZS38e5X06oyQT3tuXu5H6SvSmpr57wEbIWVoWwvIsvs3_z_ho4k_Ph03Y8Ls4gfOr_yYllE0uSlsM8Ev8xtS01X8s-qTwmsH8EBFoxC6J' },
-    { id: 'clothes', name: 'الملابس', desc: 'دفء الصوف', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC3z187EtK6tWYiXJj35pYSVZxDG6h4iEXQaKqDSPNKbA0JCNc6N9hPIrow585z5pa8tRWU_TYcO7X1y4LveJYgPA4y1brrFWQ8d3pEvEN-mMHVCl17ZqFiT8nDjU_3F-ex6iOGd2JsFdBPRVsr6xr4MzizyBWirymGTI3NY4zMAX8uChbMUNn8jR4PoJTK8hbawzCZBTwBOZf2TtCQcJku5npQxYeGpNV_2u0QMTznimEjtPpg_Gc_FC4cXRR-zWNvsK8xqTYXDGB3' },
-    { id: 'decor', name: 'ديكور المنزل', desc: 'لمسات دافئة لكل زاوية', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDbReoCW_2G46itkWtcnvgwRpPxd4pCvoIF4bC96A-eVAspC_AZ5v8wTRyyiubqwGs5TGT7YQ8h9j7mIA_NebsDgNY12qOMtWEQ5Zqmcr4IF10NxqpHjpPFp0YXj8heI4Vu6tc2V-6EF4SSZRdTj8m6G_dZ5zW2l5pWfoW9fKj7OKggLeSdmUs0yUw3ufMGxWfDQXS-g65OXBQJ1iHDVCG3SKovbnKCdLXVU9IU7JJPwiwNq7nVXkys6wx-XdBdTXPR5XROnY3aBRxU' }
+    { id: 'amigurumi', name_ar: 'الأميغورومي', name_fr: 'Amigurumi', name_en: 'Amigurumi', desc: 'دمى محشوة يدوياً تفيض باللطف', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDbTxQiXXo8BTfZLacMPEuypIjchKECBjimG760R9-k9kHrNt7omcupi9FZ5ahCf4m3nt7thcdVIzYpFy-B-gwd0ZKYpMfrCNDFOjGMDabhSyqUGfNFFq3tocWKM5JNwNXByn_cEYluS29LQ32a7KwwDTxdU3NkCSkKAheH_LX5noG-3fP5ceF1Df_zIzqSEaWxQuQdQdheoyPMMtjmAVPvcN9AjtAqKsK83SWh3sQleEnjpDcKAkfJ0JgvVD1XoZA8O_lOetdkXmIk' },
+    { id: 'accessories', name_ar: 'الإكسسوارات', name_fr: 'Accessoires', name_en: 'Accessories', desc: 'أناقة يومية', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBfG0_KcF5x0xuJ-Y6MgLPD6byJ4yxZ5-TrXb-sDMqHvHLSo5mbW9hifFYTZjrVdCNdR1-dWt8YAdq_7O6ZVRr3-8oY7UF37gd1zp07CY2cWCejMxbvMOmnyfVxfIo48_0FwKWGky4eVqqidVH0k2vbtnNZKh7cBqYZYaTZS38e5X06oyQT3tuXu5H6SvSmpr57wEbIWVoWwvIsvs3_z_ho4k_Ph03Y8Ls4gfOr_yYllE0uSlsM8Ev8xtS01X8s-qTwmsH8EBFoxC6J' },
+    { id: 'clothes', name_ar: 'الملابس', name_fr: 'Vêtements', name_en: 'Clothing', desc: 'دفء الصوف', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC3z187EtK6tWYiXJj35pYSVZxDG6h4iEXQaKqDSPNKbA0JCNc6N9hPIrow585z5pa8tRWU_TYcO7X1y4LveJYgPA4y1brrFWQ8d3pEvEN-mMHVCl17ZqFiT8nDjU_3F-ex6iOGd2JsFdBPRVsr6xr4MzizyBWirymGTI3NY4zMAX8uChbMUNn8jR4PoJTK8hbawzCZBTwBOZf2TtCQcJku5npQxYeGpNV_2u0QMTznimEjtPpg_Gc_FC4cXRR-zWNvsK8xqTYXDGB3' },
+    { id: 'decor', name_ar: 'ديكور المنزل', name_fr: 'Décoration', name_en: 'Home Decor', desc: 'لمسات دافئة لكل زاوية', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDbReoCW_2G46itkWtcnvgwRpPxd4pCvoIF4bC96A-eVAspC_AZ5v8wTRyyiubqwGs5TGT7YQ8h9j7mIA_NebsDgNY12qOMtWEQ5Zqmcr4IF10NxqpHjpPFp0YXj8heI4Vu6tc2V-6EF4SSZRdTj8m6G_dZ5zW2l5pWfoW9fKj7OKggLeSdmUs0yUw3ufMGxWfDQXS-g65OXBQJ1iHDVCG3SKovbnKCdLXVU9IU7JJPwiwNq7nVXkys6wx-XdBdTXPR5XROnY3aBRxU' }
   ],
   products: [
-    { id: 1, categoryId: 'amigurumi', name: 'دمية الأرنب "نونو"', price: '150 ر.س', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAv3syqMxfmdxXSpRL8-6kt2jDDz8d5j0yctq2nW2xlabTNU3-T7HQ7jXmqTlFSdrH-lTP2nnUhTrvwsU8k_9IaIoDQwLAbnOwFo_rrv6KXkDMoWASM24etuFWmNAWQittJ6M4UW1movQR0FU2hsRUmNp9BzzTharNkRfV6zSi1Pv5X9FqBt-VhbpSPVJtBGq8mqGDyKS67qqv8n6UEO-4rAJVkQax6hhKaNKjVRl9Ss-OVhCPQ2T8AeQq0OxeFFYqd212AQn_aaiAq' },
-    { id: 2, categoryId: 'accessories', name: 'حقيبة اليد البوهيمية', price: '275 ر.س', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBW2eEmp0H8qW07LYpB9ytL93fVfhtFBvfHVIVFjhYfDvny5Cf8SR61dyZnkdp2JHrvvQ1829-dprVLpEWpJ_rUUhZEvOPYdeonYsfNBQCkNtb6JWAzWTvv8zeS_4L6XEOH1rKvRhA4juj_CiDEZoTkzMMuy97VW__dAtjAF4RvhOU6BsMRHwuovH22TQ6lBzzylCOrX1WFHlsqktk2GYf1hvFc1xahURiaVjz9FUPgOPLWx9BXc7XsS4vlTHeSNnmCNcAz3NbVaIeT' },
-    { id: 3, categoryId: 'decor', name: 'غطاء "ليالي الشتاء"', price: '450 ر.س', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAV43jPjol3lfxV3B-eGffdr3VR6BTjs0SmGE2GheWf7PTMBjEYADajD8pFPjZjwvF9vLa7JuWGB95bLoReQ_mI8ln6z1fWxKwW5D1sjspZEstr259og-myAM7sGmm09zkFDR6NZApDRufH4-CMFFKt-3A2dKwX2TftP86lys4yuOdro8-NdnYaQMwfN3jo6OX3V16ab37SVe5OH-aiHQThSEVkKWGCcR0VIniddZcEUKKP0OsLFEDhmLDxHycgBou01JeY3cUNFgRh' },
-    { id: 4, categoryId: 'clothes', name: 'طقم قبعة صوفية', price: '120 ر.س', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDJ_N0NO8D8GKxP01aPr5uyI8pn2o5VcDjHkyz89kmxAmNhFME_KacgNYgP1PVaAJkWz6HHfpnE5GBhyOAsNvgabSU4ITiZkqI0jprnWmrYPsdub6CmKz8h65PeJASqjyHA6gmqhNE3Nb529MlAVtVuo3halIHKwmNYy5yEKcsYDLTYOdt4T9VlM7Rs32R6coV88yWzKBhGufg50pb5JDTGjPXoBzIUPhl1g-NbnDLifmAUpiVH34lAZ9YFJeEdhe00iTKS2UAAYZCD' }
+    { id: 1, categoryId: 'amigurumi', name: 'دمية الأرنب "نونو"', price: '1500 دج', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAv3syqMxfmdxXSpRL8-6kt2jDDz8d5j0yctq2nW2xlabTNU3-T7HQ7jXmqTlFSdrH-lTP2nnUhTrvwsU8k_9IaIoDQwLAbnOwFo_rrv6KXkDMoWASM24etuFWmNAWQittJ6M4UW1movQR0FU2hsRUmNp9BzzTharNkRfV6zSi1Pv5X9FqBt-VhbpSPVJtBGq8mqGDyKS67qqv8n6UEO-4rAJVkQax6hhKaNKjVRl9Ss-OVhCPQ2T8AeQq0OxeFFYqd212AQn_aaiAq', desc: 'دمية محشوة يدوياً بخيوط قطنية.', status: 'متوفر' },
+    { id: 2, categoryId: 'accessories', name: 'حقيبة اليد البوهيمية', price: '2750 دج', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBW2eEmp0H8qW07LYpB9ytL93fVfhtFBvfHVIVFjhYfDvny5Cf8SR61dyZnkdp2JHrvvQ1829-dprVLpEWpJ_rUUhZEvOPYdeonYsfNBQCkNtb6JWAzWTvv8zeS_4L6XEOH1rKvRhA4juj_CiDEZoTkzMMuy97VW__dAtjAF4RvhOU6BsMRHwuovH22TQ6lBzzylCOrX1WFHlsqktk2GYf1hvFc1xahURiaVjz9FUPgOPLWx9BXc7XsS4vlTHeSNnmCNcAz3NbVaIeT', desc: 'حقيبة صيفية أنيقة.', status: 'يصنع حسب الطلب' }
   ],
   orders: []
 };
 
+// 🚀 تم توسيع القاموس ليشمل كل كلمة في الموقع
+const translations = {
+  ar: { 
+    hero_title1: "ننسج من خيوط الصوف", hero_title2: "حكايات دافئة", 
+    hero_desc: "اكتشف روعة الكروشيه اليدوي في تصاميم تجمع بين الأصالة والعصرية. كل قطعة لدينا هي تحفة فريدة صُممت لتدوم طويلاً.", 
+    hero_badge: "صُنع بحب وشغف", browse_btn: "تصفح المجموعات", custom_order_btn: "طلب تصميم خاص", 
+    what_we_make: "اكتشف عالمنا المنسوج", collections_sub: "تصفح أقسامنا المتنوعة المختارة بعناية لتناسب ذوقك واحتياجاتك",
+    shop_now: "تسوق الآن", view_more: "عرض المزيد", home_nav: "الرئيسية", order_product_btn: "أضف للسلة", 
+    order_success: "تم استلام طلبك بنجاح!", admin_title: "لوحة الإدارة",
+    about_title: "ما وراء الغرزة...", about_desc: "بدأ متجر الكروشيه كحلم بسيط في زاوية صغيرة، محوره تقدير العمل اليدوي والجمال الهادئ. نحن نؤمن أن الخيوط ليست مجرد مادة خام، بل هي وسيلة للتعبير عن المشاعر وتجميل المساحات.",
+    feat_1: "صناعة يدوية 100% بكل فخر", feat_2: "مواد صديقة للبيئة وخيوط طبيعية", feat_3: "إمكانية التخصيص حسب طلبك",
+    best_sellers: "الأكثر طلباً", best_sellers_sub: "قطع مميزة نالت إعجاب عملائنا مؤخراً",
+    no_products: "لا توجد منتجات جاهزة هنا بعد.", order_custom_cat: "اطلب تصميم مخصص في هذا القسم",
+    back: "العودة", complete_order: "إتمام الطلب", custom_order: "صمم قطعتك الخاصة",
+    complete_desc: "أدخل معلوماتك وسنتواصل معك لتأكيد الشحن.", custom_desc: "أرسل لنا فكرتك، وسنحولها إلى واقع ملموس بحب وإتقان.",
+    selected_prod: "المنتج المختار:", full_name: "الاسم الكامل", name_placeholder: "أدخل اسمك",
+    phone: "رقم الهاتف (يفضل واتساب)", upload_img: "إرفاق صورة للتصميم (اختياري)", 
+    upload_desc: "هل لديك صورة لقطعة تشبه ما تريدين؟ ارفعيها هنا لمساعدتنا في فهم طلبك.",
+    notes: "الملاحظات والتفاصيل", notes_opt: "(اختياري)", notes_ph_prod: "أي تعديلات على الألوان أو المقاسات...",
+    notes_ph_cust: "صِف لنا القطعة التي تحلم بها (الألوان، المقاسات، نوع الخيط...)", submit_order: "إرسال الطلب",
+    footer_title: "المنسوج الحرفي", footer_desc: "نهتم بأدق التفاصيل لنقدم لكم قطعاً يدوية تلامس القلب وتزين حياتكم بالدفء.",
+    contact: "تواصل معنا", terms: "الشروط والأحكام", logout: "تسجيل الخروج", admin_orders: "الطلبات", admin_products: "المنتجات والأقسام"
+  },
+  fr: { 
+    hero_title1: "Nous tissons de", hero_title2: "Chaudes Histoires", 
+    hero_desc: "Découvrez la beauté du crochet fait main dans des designs qui allient tradition et modernité.", 
+    hero_badge: "Fait avec passion", browse_btn: "Parcourir", custom_order_btn: "Commande Spéciale", 
+    what_we_make: "Découvrez notre monde", collections_sub: "Parcourez nos catégories soigneusement sélectionnées",
+    shop_now: "Acheter", view_more: "Voir plus", home_nav: "Accueil", order_product_btn: "Commander", 
+    order_success: "Commande reçue !", admin_title: "Tableau de bord",
+    about_title: "Derrière la maille...", about_desc: "La boutique a commencé comme un rêve. Nous croyons que le fil n'est pas seulement une matière, mais un moyen d'exprimer des émotions.",
+    feat_1: "100% fait main", feat_2: "Matériaux écologiques", feat_3: "Personnalisable selon vos souhaits",
+    best_sellers: "Meilleures Ventes", best_sellers_sub: "Des pièces uniques appréciées par nos clients",
+    no_products: "Aucun produit disponible ici pour le moment.", order_custom_cat: "Commander sur mesure",
+    back: "Retour", complete_order: "Finaliser la commande", custom_order: "Créez votre pièce",
+    complete_desc: "Entrez vos informations pour la livraison.", custom_desc: "Envoyez-nous votre idée, nous la réaliserons avec amour.",
+    selected_prod: "Produit sélectionné :", full_name: "Nom complet", name_placeholder: "Votre nom",
+    phone: "Téléphone (WhatsApp de préférence)", upload_img: "Joindre une image (optionnel)", 
+    upload_desc: "Avez-vous une photo d'inspiration ? Téléchargez-la ici.",
+    notes: "Notes et détails", notes_opt: "(Optionnel)", notes_ph_prod: "Modifications de couleurs ou tailles...",
+    notes_ph_cust: "Décrivez la pièce de vos rêves...", submit_order: "Envoyer la commande",
+    footer_title: "Artisanat Tissé", footer_desc: "Nous prêtons attention aux moindres détails pour vous offrir des pièces qui touchent le cœur.",
+    contact: "Contactez-nous", terms: "Termes et conditions", logout: "Déconnexion", admin_orders: "Commandes", admin_products: "Produits et Catégories"
+  },
+  en: { 
+    hero_title1: "We weave wool into", hero_title2: "Warm Stories", 
+    hero_desc: "Discover the beauty of handmade crochet in designs that combine tradition and modernity.", 
+    hero_badge: "Made with love", browse_btn: "Browse Collections", custom_order_btn: "Custom Order", 
+    what_we_make: "Discover our woven world", collections_sub: "Browse our carefully selected categories to suit your taste",
+    shop_now: "Shop Now", view_more: "View More", home_nav: "Home", order_product_btn: "Add to Cart", 
+    order_success: "Order received successfully!", admin_title: "Admin Dashboard",
+    about_title: "Behind the stitch...", about_desc: "The shop started as a simple dream. We believe that yarn is not just a raw material, but a medium to express emotions.",
+    feat_1: "Proudly 100% handmade", feat_2: "Eco-friendly materials", feat_3: "Customizable to your request",
+    best_sellers: "Best Sellers", best_sellers_sub: "Unique pieces recently loved by our customers",
+    no_products: "No ready-made products here yet.", order_custom_cat: "Request a custom design",
+    back: "Back", complete_order: "Complete Order", custom_order: "Design Your Own",
+    complete_desc: "Enter your details and we will contact you.", custom_desc: "Send us your idea, and we will turn it into reality.",
+    selected_prod: "Selected Product:", full_name: "Full Name", name_placeholder: "Enter your name",
+    phone: "Phone (WhatsApp preferred)", upload_img: "Attach an image (optional)", 
+    upload_desc: "Do you have an inspiration photo? Upload it here.",
+    notes: "Notes and Details", notes_opt: "(Optional)", notes_ph_prod: "Any color or size adjustments...",
+    notes_ph_cust: "Describe the piece of your dreams...", submit_order: "Submit Order",
+    footer_title: "Woven Craft", footer_desc: "We pay attention to the smallest details to bring you handmade pieces that touch the heart.",
+    contact: "Contact Us", terms: "Terms and Conditions", logout: "Log out", admin_orders: "Orders", admin_products: "Products & Categories"
+  }
+};
 
 export default function App() {
+  const [lang, setLang] = useState('ar');
   const [view, setView] = useState('home'); 
   const [activeCategory, setActiveCategory] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // Admin states
+  const [authUser, setAuthUser] = useState(null);
+
+  const [storeData, setStoreData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('knotiqueProData_v8');
+      if (saved) {
+        const parsedData = JSON.parse(saved);
+        if(parsedData && Array.isArray(parsedData.categories) && Array.isArray(parsedData.products)) {
+          return parsedData;
+        }
+      }
+    } catch (e) { console.error("Error loading data", e); }
+    return defaultData;
+  });
+
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPwd, setAdminPwd] = useState('');
   const [adminError, setAdminError] = useState(false);
   const [adminTab, setAdminTab] = useState('orders');
-  
-  // App Data (Lazy init to avoid overwriting on refresh)
-  const [storeData, setStoreData] = useState(() => {
-    const saved = localStorage.getItem('knotiqueStore');
-    return saved ? JSON.parse(saved) : defaultData;
-  });
+
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [catForm, setCatForm] = useState({ name_ar: '', name_fr: '', name_en: '', img: '', desc: '' });
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [prodForm, setProdForm] = useState({ categoryId: '', name: '', price: '', desc: '', image: '', status: 'متوفر' });
+
+  const [customOrderImage, setCustomOrderImage] = useState(null);
 
   useEffect(() => {
-    localStorage.setItem('knotiqueStore', JSON.stringify(storeData));
+    if (!isFirebaseActive) return;
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) { console.error("Auth Error", e); }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setAuthUser);
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!isFirebaseActive || !authUser) return;
+
+    const unsubCategories = onSnapshot(getColRef('categories'), (snap) => {
+      if (!snap.empty) setStoreData(prev => ({ ...prev, categories: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
+    });
+    const unsubProducts = onSnapshot(getColRef('products'), (snap) => {
+      if (!snap.empty) setStoreData(prev => ({ ...prev, products: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
+    });
+    const unsubOrders = onSnapshot(getColRef('orders'), (snap) => {
+      const ords = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      ords.sort((a, b) => b.timestamp - a.timestamp);
+      setStoreData(prev => ({ ...prev, orders: ords }));
+    });
+
+    return () => { unsubCategories(); unsubProducts(); unsubOrders(); };
+  }, [authUser]);
+
+  useEffect(() => {
+    localStorage.setItem('knotiqueProData_v8', JSON.stringify(storeData));
   }, [storeData]);
 
-  // CSS Injection for Fonts and specific Design System rules
+  useEffect(() => {
+    document.body.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  }, [lang]);
+
   useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = `
       @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
       @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
-      
-      body {
-        background-color: ${colors.background};
-        color: ${colors.onSurface};
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        direction: rtl;
-      }
-      h1, h2, h3, h4, h5, .font-headline {
-        font-family: 'Noto Serif', serif;
-      }
-      .asymmetric-grain {
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-        opacity: 0.04;
-        pointer-events: none;
-      }
-      .glass-nav {
-        background: rgba(253, 248, 245, 0.85);
-        backdrop-filter: blur(12px);
-      }
-      .soft-shadow {
-        box-shadow: 0 20px 40px rgba(52, 50, 47, 0.06);
-      }
+      body { background-color: ${colors.background}; color: ${colors.onSurface}; font-family: 'Plus Jakarta Sans', sans-serif; }
+      h1, h2, h3, h4, h5, .font-headline { font-family: 'Noto Serif', serif; }
+      .asymmetric-grain { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); opacity: 0.04; pointer-events: none; }
+      .glass-nav { background: rgba(253, 248, 245, 0.85); backdrop-filter: blur(12px); }
+      .soft-shadow { box-shadow: 0 20px 40px rgba(52, 50, 47, 0.06); }
       .no-zoom { touch-action: manipulation; }
+      input[type=file]::file-selector-button { border: 2px solid ${colors.primary}; padding: .4em .8em; border-radius: .8em; background-color: ${colors.surface}; color: ${colors.primary}; cursor: pointer; transition: all .2s ease-in-out; font-weight: bold; margin-inline-end: 1rem; }
+      input[type=file]::file-selector-button:hover { background-color: ${colors.primary}; color: white; }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
   }, []);
 
-  // Navigation Helper
+  const t = (key) => translations[lang][key] || key;
+  const getCatName = (cat) => lang === 'ar' ? cat?.name_ar : lang === 'fr' ? cat?.name_fr : cat?.name_en;
+
   const navigateTo = (targetView) => {
     setView(targetView);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setIsMobileMenuOpen(false);
   };
 
-  // Smart Logo Click (Double Click for Admin)
-  let clickTimeout = null;
+  const toggleLanguage = () => {
+    const langs = ['ar', 'fr', 'en'];
+    setLang(langs[(langs.indexOf(lang) + 1) % langs.length]);
+  };
+
+  const clickTimeout = useRef(null);
   const handleLogoClick = (e) => {
     e.preventDefault();
-    if (e.detail === 1) {
-      clickTimeout = setTimeout(() => navigateTo('home'), 300);
-    } else if (e.detail === 2) {
-      clearTimeout(clickTimeout);
+    if (clickTimeout.current) {
+      clearTimeout(clickTimeout.current);
+      clickTimeout.current = null;
       setShowAdminModal(true);
       setAdminError(false);
       setAdminPwd('');
+    } else {
+      clickTimeout.current = setTimeout(() => {
+        navigateTo('home');
+        clickTimeout.current = null;
+      }, 350); 
     }
   };
 
@@ -157,232 +283,272 @@ export default function App() {
     }
   };
 
-  // Handle Ordering
-  const submitOrder = (e) => {
+  const handleImageUpload = (e, callback) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 600;
+          const scaleSize = MAX_WIDTH / img.width;
+          canvas.width = MAX_WIDTH;
+          canvas.height = img.height * scaleSize;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          callback(dataUrl);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const submitOrder = async (e) => {
     e.preventDefault();
+    const orderId = Date.now().toString();
     const orderData = {
-      id: Date.now(),
+      id: orderId,
+      timestamp: Date.now(),
       date: new Date().toLocaleString('ar-DZ'),
-      type: selectedProduct ? 'منتج جاهز' : 'طلب مخصص',
+      type: selectedProduct ? 'منتج جاهز' : 'تصميم مخصص',
       productName: selectedProduct || 'قطعة حسب الطلب',
       customerName: e.target.name.value,
       phone: e.target.phone.value,
       notes: e.target.notes.value,
+      image: customOrderImage || '',
       status: 'جديد'
     };
 
-    setStoreData(prev => ({...prev, orders: [orderData, ...prev.orders]}));
+    setStoreData(prev => ({...prev, orders: [orderData, ...(prev.orders || [])]}));
     
-    // عند تفعيل فايربيس، قم بإزالة التعليق عن السطر التالي:
-    // saveOrderToFirebase(orderData);
+    if (isFirebaseActive) {
+      try { await setDoc(doc(getColRef('orders'), orderId), orderData); } catch (err) { console.error(err); }
+    }
 
-    alert("تم استلام طلبك بحب! سنتواصل معك قريباً.");
+    setCustomOrderImage(null);
+    alert(t('order_success'));
     navigateTo('home');
   };
 
+  const handleSaveCategory = async (e) => {
+    e.preventDefault();
+    const catId = editingCategory ? editingCategory.id : 'cat_' + Date.now().toString();
+    const catData = { id: catId, ...catForm };
+    
+    if (editingCategory) {
+      setStoreData(prev => ({ ...prev, categories: prev.categories?.map(c => c.id === catId ? catData : c) }));
+    } else {
+      setStoreData(prev => ({ ...prev, categories: [...(prev.categories || []), catData] }));
+    }
+
+    if (isFirebaseActive) {
+      try { await setDoc(doc(getColRef('categories'), catId), catData); } catch (err) { console.error(err); }
+    }
+    setEditingCategory(null);
+    setCatForm({ name_ar: '', name_fr: '', name_en: '', img: '', desc: '' });
+  };
+
+  const handleSaveProduct = async (e) => {
+    e.preventDefault();
+    const prodId = editingProduct ? editingProduct.id : Date.now().toString();
+    const prodData = { id: prodId, ...prodForm };
+    
+    if (editingProduct) {
+      setStoreData(prev => ({ ...prev, products: prev.products?.map(p => p.id === prodId ? prodData : p) }));
+    } else {
+      setStoreData(prev => ({ ...prev, products: [prodData, ...(prev.products || [])] }));
+    }
+
+    if (isFirebaseActive) {
+      try { await setDoc(doc(getColRef('products'), prodId), prodData); } catch (err) { console.error(err); }
+    }
+    setEditingProduct(null);
+    setProdForm({ categoryId: '', name: '', price: '', desc: '', image: '', status: 'متوفر' });
+  };
+
+  const deleteItem = async (type, id) => {
+    if(window.confirm("هل أنت متأكد من الحذف نهائياً؟")) {
+      if(type === 'product') setStoreData(prev => ({ ...prev, products: prev.products?.filter(p => p.id !== id) }));
+      if(type === 'category') setStoreData(prev => ({ ...prev, categories: prev.categories?.filter(c => c.id !== id) }));
+      if(type === 'order') setStoreData(prev => ({ ...prev, orders: prev.orders?.filter(o => o.id !== id) }));
+
+      if (isFirebaseActive) {
+        try {
+          const colName = type === 'product' ? 'products' : type === 'category' ? 'categories' : 'orders';
+          await deleteDoc(doc(getColRef(colName), id.toString()));
+        } catch (err) { console.error(err); }
+      }
+    }
+  };
+
+  const startEditingCategory = (cat) => {
+    setEditingCategory(cat);
+    setCatForm(cat);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const startEditingProduct = (prod) => {
+    setEditingProduct(prod);
+    setProdForm(prod);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div className="min-h-screen flex flex-col relative">
+    <div className="min-h-screen flex flex-col relative selection:bg-[#E2B4B8] selection:text-white">
       
-      {/* --- Navigation Bar --- */}
+      <div className={`fixed bottom-6 ${lang === 'ar' ? 'right-6' : 'left-6'} z-50`}>
+        <button onClick={toggleLanguage} className="bg-white text-[#1F2937] border border-gray-200 w-12 h-12 rounded-full font-bold shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:bg-gray-50 transition transform hover:scale-105 flex items-center justify-center">
+          {lang.toUpperCase()}
+        </button>
+      </div>
+
       <nav className="glass-nav sticky top-0 z-50 w-full border-b border-white/20">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          
           <div className="flex items-center gap-10">
-            {/* Logo */}
-            <div className="cursor-pointer no-zoom flex items-center gap-2" onClick={handleLogoClick} title="انقر مرتين لدخول المدير">
-              <i className="fa-solid fa-fan text-2xl" style={{color: colors.primary}}></i>
-              <span className="text-2xl font-bold font-headline" style={{color: colors.primary}}>Knotique</span>
+            <div className="cursor-pointer no-zoom flex items-center gap-3 group" onClick={handleLogoClick} title="انقر مرتين لدخول المدير">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm overflow-hidden border border-gray-100">
+                <img src="/image.png" alt="Knotique Logo" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                <CrochetLogo className="w-8 h-8 text-[#E2B4B8] hidden" />
+              </div>
+              <span className="text-2xl font-extrabold font-headline tracking-wider text-[#1F2937] hidden sm:block">Knotique</span>
             </div>
-
-            {/* Desktop Links */}
-            <div className="hidden lg:flex items-center gap-8">
-              <button onClick={() => navigateTo('home')} className={`font-bold transition-all ${view === 'home' ? 'border-b-2 pb-1' : 'opacity-70 hover:opacity-100'}`} style={{color: view === 'home' ? colors.primary : colors.secondary, borderColor: colors.primary}}>الرئيسية</button>
-              {storeData.categories.map(cat => (
-                <button key={cat.id} onClick={() => { setActiveCategory(cat); navigateTo('category'); }} className="font-bold opacity-70 hover:opacity-100 transition-all" style={{color: colors.secondary}}>
-                  {cat.name}
+            <div className="hidden lg:flex items-center gap-8 rtl:space-x-reverse space-x-8">
+              <button onClick={() => navigateTo('home')} className={`text-sm font-bold transition-all ${view === 'home' ? 'text-[#E2B4B8]' : 'text-gray-500 hover:text-[#E2B4B8]'}`}>{t('home_nav')}</button>
+              {storeData.categories?.map(cat => (
+                <button key={cat.id} onClick={() => { setActiveCategory(cat); navigateTo('category'); }} className={`text-sm font-bold transition-all ${activeCategory?.id === cat.id && view === 'category' ? 'text-[#E2B4B8]' : 'text-gray-500 hover:text-[#E2B4B8]'}`}>
+                  {getCatName(cat)}
                 </button>
               ))}
             </div>
           </div>
-
           <div className="flex items-center gap-4">
-            <button onClick={() => {setSelectedProduct(null); navigateTo('order');}} className="hidden md:block px-6 py-2.5 rounded-full font-bold text-white transition-opacity hover:opacity-90" style={{backgroundColor: colors.primary}}>
-              طلب خاص
+            <button onClick={() => {setSelectedProduct(null); navigateTo('order');}} className="hidden lg:flex bg-[#1F2937] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-[0_8px_20px_rgb(31,41,55,0.2)] hover:-translate-y-0.5 transition-all duration-300 items-center gap-2">
+              <i className="fa-solid fa-wand-magic-sparkles"></i> {t('custom_order_btn')}
             </button>
-            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="lg:hidden p-2 rounded-full bg-white soft-shadow">
-              <i className={`fa-solid ${isMobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-xl`} style={{color: colors.primary}}></i>
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="lg:hidden p-2 rounded-xl bg-gray-50 text-[#1F2937]">
+              <i className={`fa-solid ${isMobileMenuOpen ? 'fa-xmark' : 'fa-bars-staggered'} text-xl`}></i>
             </button>
           </div>
         </div>
-
-        {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="lg:hidden absolute top-full left-0 w-full bg-white shadow-xl border-t border-gray-100 py-4 px-6 flex flex-col gap-4">
-             <button onClick={() => navigateTo('home')} className="text-right font-bold text-lg" style={{color: colors.primary}}>الرئيسية</button>
-             {storeData.categories.map(cat => (
-                <button key={cat.id} onClick={() => { setActiveCategory(cat); navigateTo('category'); }} className="text-right font-bold text-lg" style={{color: colors.secondary}}>
-                  {cat.name}
+          <div className="lg:hidden absolute top-full left-0 w-full bg-white shadow-xl border-t border-gray-100 py-4 px-6 flex flex-col gap-2">
+             <button onClick={() => navigateTo('home')} className="text-start font-bold text-lg p-2 rounded-lg hover:bg-[#FFF5F5] hover:text-[#E2B4B8] text-[#1F2937]">{t('home_nav')}</button>
+             {storeData.categories?.map(cat => (
+                <button key={cat.id} onClick={() => { setActiveCategory(cat); navigateTo('category'); }} className="text-start font-bold text-lg p-2 rounded-lg hover:bg-[#FFF5F5] hover:text-[#E2B4B8] text-[#1F2937]">
+                  {getCatName(cat)}
                 </button>
              ))}
-             <button onClick={() => {setSelectedProduct(null); navigateTo('order');}} className="w-full mt-4 px-6 py-3 rounded-xl font-bold text-white text-center" style={{backgroundColor: colors.primary}}>طلب خاص</button>
+             <button onClick={() => {setSelectedProduct(null); navigateTo('order');}} className="w-full mt-4 px-6 py-3.5 rounded-xl font-bold text-white text-center bg-[#1F2937] shadow-lg">
+                {t('custom_order_btn')}
+             </button>
           </div>
         )}
       </nav>
 
-      {/* --- Main Content Area --- */}
       <main className="flex-grow">
-        
-        {/* ==================== HOME VIEW ==================== */}
         {view === 'home' && (
-          <div className="animate-[fadeIn_0.5s_ease-out]">
-            
-            {/* Hero Section */}
-            <section className="relative min-h-[85vh] flex items-center overflow-hidden pt-12 pb-20">
-              <div className="absolute inset-0 bg-gradient-to-tr from-[#c5eccc]/30 to-[#ffdcbd]/20 -z-10"></div>
-              <div className="absolute inset-0 asymmetric-grain -z-10"></div>
-              
-              <div className="max-w-7xl mx-auto px-6 w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative z-10">
-                <div className="order-2 lg:order-1 text-right">
-                  <span className="inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-6" style={{backgroundColor: colors.tertiaryContainer, color: '#643c45'}}>صُنع بحب وشغف</span>
-                  <h1 className="font-headline text-5xl md:text-7xl leading-tight mb-8" style={{color: colors.onSurface}}>
-                    ننسج من خيوط الصوف <span className="italic font-light" style={{color: colors.primary}}>حكايات دافئة</span>
-                  </h1>
-                  <p className="text-lg md:text-xl max-w-xl mb-12 leading-relaxed" style={{color: colors.onSurfaceVariant}}>
-                    اكتشف روعة الكروشيه اليدوي في تصاميم تجمع بين الأصالة والعصرية. كل قطعة لدينا هي تحفة فريدة صُممت لتدوم طويلاً.
-                  </p>
-                  <div className="flex flex-wrap gap-4">
-                    <button onClick={() => document.getElementById('collections').scrollIntoView({behavior:'smooth'})} className="px-10 py-4 rounded-full text-lg font-bold text-white hover:opacity-90 transition-all soft-shadow hover:-translate-y-1" style={{backgroundColor: colors.primary}}>
-                      تصفح المجموعات
-                    </button>
-                  </div>
+          <div className="animate-[fadeIn_0.4s_ease-out]">
+            <section className="relative min-h-[85vh] flex items-center overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#FFF5F5] via-white to-white opacity-80 -z-10"></div>
+              <div className="max-w-5xl mx-auto px-6 py-20 text-center relative z-10 flex flex-col items-center">
+                <div className="w-24 h-24 bg-white rounded-3xl soft-shadow flex items-center justify-center overflow-hidden mb-8 border border-gray-50">
+                  <img src="/image.png" alt="Logo" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                  <CrochetLogo className="w-14 h-14 text-[#E2B4B8] hidden" />
                 </div>
-                
-                <div className="order-1 lg:order-2 relative">
-                  <div className="relative w-full aspect-square max-w-lg mx-auto">
-                    <div className="absolute top-0 right-0 w-4/5 h-4/5 rounded-[2rem] overflow-hidden rotate-3 z-20 shadow-2xl border-4 border-white">
-                      <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAy7qFd__Jl-zvsXGSkdLhlWFQ_GU2jw0Ovw36UwhCcTVX6onspH4RKyEyo7r2hI4W5vxG2N1TnHEb29ZJObP_H3W9dLQ3F5oOFU1oeGItzFbXRTrqRejKgAZPelVbdkl0rp87KNCuoCN-I6FPzpl4ChbU_vgy_RxC-VtcE_aAImKja9MJNbmIwsBTc_vmmh9Prdvqeqpc4mwySUwg0P_hpn8hSxrDf1NBj8DfLAPdPARK4ZoPCTLBXSRC2NjoClHic2NXW_oWk_AOK" alt="Crochet"/>
-                    </div>
-                    <div className="absolute bottom-0 left-0 w-3/4 h-3/4 rounded-[2rem] overflow-hidden -rotate-6 z-10 opacity-90 border-4 border-white">
-                      <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLLfVwC-5_zzEtBrr1g-s4WzGoMaEWJK-VO0zVf36pKGVSfBgg9yr6atkPbtuXJaMLRHxYzpUtDjPd65JXunGyo84Cp89gkWvyRbzEKCR3eVVc6R9v_mnWS74nRQvFDNbRXboIrwzHpaO4s5pa1Z_aJBZ43K0VqTupm6AzmbNeT-xSpM4PS8iAHx-h7f9TMJZ810-ezSHxBnvAbHn9OsQr9TVug4kV_YRR_EZ5ZX6Zkg5kTkdD47oDMCRWT-0jJ_8pRKItHfVo9hkI" alt="Tools"/>
-                    </div>
-                  </div>
+                <span className="inline-block bg-[#fcc3ce] text-[#643c45] px-4 py-1.5 rounded-full text-sm font-medium mb-6">{t('hero_badge')}</span>
+                <h1 className="font-headline text-5xl md:text-7xl leading-tight mb-6 font-extrabold text-[#1F2937]">
+                  {t('hero_title1')} <br className="hidden md:block"/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E2B4B8] to-[#D4A373]">{t('hero_title2')}</span>
+                </h1>
+                <p className="text-lg md:text-xl max-w-2xl mb-10 leading-relaxed font-medium text-gray-500">
+                  {t('hero_desc')}
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button onClick={() => document.getElementById('collections').scrollIntoView({behavior:'smooth'})} className="px-8 py-4 rounded-xl text-lg font-bold text-white transition-all shadow-lg hover:-translate-y-1" style={{backgroundColor: colors.primaryContainer, color: colors.onSurface}}>
+                    {t('browse_btn')}
+                  </button>
+                  <button onClick={() => { setSelectedProduct(null); navigateTo('order'); }} className="px-8 py-4 rounded-xl text-lg font-bold bg-white text-[#1F2937] border-2 border-gray-100 hover:border-[#1F2937] transition-all">
+                    {t('custom_order_btn')}
+                  </button>
                 </div>
               </div>
             </section>
 
-            {/* About Section */}
-            <section className="py-24" style={{backgroundColor: colors.surfaceLow}}>
-              <div className="max-w-7xl mx-auto px-6">
-                <div className="bg-white rounded-[3rem] p-10 md:p-20 flex flex-col md:flex-row gap-16 items-center soft-shadow relative overflow-hidden">
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-[#c5eccc] rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                   
-                   <div className="w-full md:w-1/2 relative z-10">
-                     <h2 className="font-headline text-4xl mb-8 italic" style={{color: colors.onSurface}}>ما وراء الغرزة...</h2>
-                     <p className="text-lg leading-relaxed mb-6" style={{color: colors.onSurfaceVariant}}>
-                        بدأ متجر الكروشيه كحلم بسيط، محوره تقدير العمل اليدوي والجمال الهادئ. نحن نؤمن أن الخيوط ليست مجرد مادة خام، بل هي وسيلة للتعبير عن المشاعر وتجميل المساحات.
-                     </p>
+            <section className="py-24 bg-[#f8f3ef]">
+              <div className="max-w-7xl mx-auto px-6 lg:px-8">
+                <div className="bg-[#ffffff] rounded-[2rem] p-10 md:p-16 flex flex-col md:flex-row gap-16 items-center shadow-sm">
+                   <div className="w-full md:w-1/2">
+                     <div className="rounded-2xl overflow-hidden h-[400px] md:h-[500px]">
+                       <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWoWmClUOMYGcw94G5TCHEqZ4mH238jOCliQ1ZcmPRWBFCVEfCYxF8UarOlGTjBjSGEsiqLGOkkMjOdaKpsVp4xbthsN3nFohjhSu31R_s0EAYYOgqKUO-z3HHIs3MVLUInZpcxSrIqM4Tzc-H9Obh-vjK6oxajmF7Nvt38oPgDOG86DwoctemNBbpZxBdfA4nZYPMOJMMzX27m7gT35QZodDSJMfk7uR17WQwH8ZHGqbBCbnPPvxx3qGqKS_UICkigMauU0snGps0" alt="Knitting process"/>
+                     </div>
+                   </div>
+                   <div className="w-full md:w-1/2">
+                     <h2 className="font-headline text-4xl text-[#34322f] mb-8 italic">{t('about_title')}</h2>
+                     <p className="text-[#615f5b] text-lg leading-relaxed mb-6">{t('about_desc')}</p>
                      <ul className="space-y-4 mt-8">
-                        <li className="flex items-center gap-3 font-bold" style={{color: colors.secondary}}>
-                          <i className="fa-solid fa-check-circle text-xl"></i> صناعة يدوية 100% بكل فخر
+                        <li className="flex items-center gap-3 text-[#7e572e] font-medium">
+                          <span className="material-symbols-outlined">check_circle</span> {t('feat_1')}
                         </li>
-                        <li className="flex items-center gap-3 font-bold" style={{color: colors.secondary}}>
-                          <i className="fa-solid fa-leaf text-xl"></i> مواد صديقة للبيئة وخيوط طبيعية
+                        <li className="flex items-center gap-3 text-[#7e572e] font-medium">
+                          <span className="material-symbols-outlined">eco</span> {t('feat_2')}
                         </li>
-                        <li className="flex items-center gap-3 font-bold" style={{color: colors.secondary}}>
-                          <i className="fa-solid fa-pen-nib text-xl"></i> إمكانية التخصيص حسب طلبك
+                        <li className="flex items-center gap-3 text-[#7e572e] font-medium">
+                          <span className="material-symbols-outlined">design_services</span> {t('feat_3')}
                         </li>
                      </ul>
                    </div>
-
-                   <div className="w-full md:w-1/2 relative z-10">
-                     <div className="rounded-[2rem] overflow-hidden h-[450px] shadow-lg">
-                       <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWoWmClUOMYGcw94G5TCHEqZ4mH238jOCliQ1ZcmPRWBFCVEfCYxF8UarOlGTjBjSGEsiqLGOkkMjOdaKpsVp4xbthsN3nFohjhSu31R_s0EAYYOgqKUO-z3HHIs3MVLUInZpcxSrIqM4Tzc-H9Obh-vjK6oxajmF7Nvt38oPgDOG86DwoctemNBbpZxBdfA4nZYPMOJMMzX27m7gT35QZodDSJMfk7uR17WQwH8ZHGqbBCbnPPvxx3qGqKS_UICkigMauU0snGps0" alt="Knitting"/>
-                     </div>
-                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Categories Bento Grid */}
             <section id="collections" className="py-24 relative">
               <div className="absolute inset-0 asymmetric-grain -z-10 opacity-50"></div>
               <div className="max-w-7xl mx-auto px-6">
                 <div className="text-center mb-16">
-                  <h2 className="font-headline text-4xl mb-4" style={{color: colors.onSurface}}>اكتشف عالمنا المنسوج</h2>
-                  <p className="max-w-2xl mx-auto" style={{color: colors.onSurfaceVariant}}>تصفح أقسامنا المتنوعة المختارة بعناية لتناسب ذوقك واحتياجاتك</p>
+                  <h2 className="font-headline text-4xl mb-4 font-extrabold text-[#1F2937]">{t('what_we_make')}</h2>
+                  <p className="text-[#615f5b] max-w-2xl mx-auto">{t('collections_sub')}</p>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-auto md:h-[700px]">
-                  
-                  {/* Category 1 (Large) */}
-                  <div onClick={() => { setActiveCategory(storeData.categories[0]); navigateTo('category'); }} className="md:col-span-8 group relative overflow-hidden rounded-[2rem] cursor-pointer" style={{backgroundColor: colors.surfaceHigh}}>
-                    <img src={storeData.categories[0].img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Amigurumi" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#34322f]/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-8 right-8 text-white">
-                      <h3 className="font-headline text-3xl mb-2">{storeData.categories[0].name}</h3>
-                      <p className="mb-6 opacity-90">{storeData.categories[0].desc}</p>
-                      <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-6 py-2.5 rounded-full font-bold">تسوق الآن <i className="fa-solid fa-arrow-left"></i></span>
-                    </div>
-                  </div>
-
-                  {/* Category 2 (Small) */}
-                  <div onClick={() => { setActiveCategory(storeData.categories[1]); navigateTo('category'); }} className="md:col-span-4 group relative overflow-hidden rounded-[2rem] cursor-pointer" style={{backgroundColor: colors.surfaceHigh}}>
-                    <img src={storeData.categories[1].img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Accessories" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#34322f]/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-8 right-8 text-white">
-                      <h3 className="font-headline text-2xl mb-4">{storeData.categories[1].name}</h3>
-                      <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-5 py-2 rounded-full text-sm font-bold">عرض المزيد</span>
-                    </div>
-                  </div>
-
-                  {/* Category 3 (Small) */}
-                  <div onClick={() => { setActiveCategory(storeData.categories[2]); navigateTo('category'); }} className="md:col-span-4 group relative overflow-hidden rounded-[2rem] cursor-pointer" style={{backgroundColor: colors.surfaceHigh}}>
-                    <img src={storeData.categories[2].img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Clothes" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#34322f]/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-8 right-8 text-white">
-                      <h3 className="font-headline text-2xl mb-4">{storeData.categories[2].name}</h3>
-                      <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-5 py-2 rounded-full text-sm font-bold">عرض المزيد</span>
-                    </div>
-                  </div>
-
-                  {/* Category 4 (Large) */}
-                  <div onClick={() => { setActiveCategory(storeData.categories[3]); navigateTo('category'); }} className="md:col-span-8 group relative overflow-hidden rounded-[2rem] cursor-pointer" style={{backgroundColor: colors.surfaceHigh}}>
-                    <img src={storeData.categories[3].img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Decor" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#34322f]/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-8 right-8 text-white">
-                      <h3 className="font-headline text-3xl mb-2">{storeData.categories[3].name}</h3>
-                      <p className="mb-6 opacity-90">{storeData.categories[3].desc}</p>
-                      <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-6 py-2.5 rounded-full font-bold">تسوق الآن <i className="fa-solid fa-arrow-left"></i></span>
-                    </div>
-                  </div>
-
+                  {storeData.categories?.map((cat, index) => {
+                    const isLarge = index === 0 || index === 3;
+                    return (
+                      <div key={cat.id} onClick={() => { setActiveCategory(cat); navigateTo('category'); }} className={`group cursor-pointer bg-white rounded-3xl p-3 soft-shadow hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-2 transition-all duration-300 border border-gray-50 ${isLarge ? 'md:col-span-8' : 'md:col-span-4'}`}>
+                        <div className={`overflow-hidden rounded-2xl relative mb-4 ${isLarge ? 'h-56 md:h-[60%]' : 'h-56 md:h-[60%]'}`}>
+                          <div className="absolute inset-0 bg-[#1F2937] opacity-0 group-hover:opacity-10 transition-opacity duration-300 z-10"></div>
+                          <img src={cat.img || 'https://images.unsplash.com/photo-1584061245059-4b13e9a7818e?w=600'} className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500" alt={getCatName(cat)} />
+                        </div>
+                        <div className="px-4 pb-2 text-center flex flex-col justify-center items-center h-[35%]">
+                          <h3 className="font-headline text-2xl font-bold mb-2 text-[#1F2937]">{getCatName(cat)}</h3>
+                          <span className="inline-flex items-center gap-2 bg-[#FFF5F5] text-[#E2B4B8] px-5 py-2 rounded-full text-sm font-bold">{isLarge ? t('shop_now') : t('view_more')} <i className={`fa-solid ${lang === 'ar' ? 'fa-arrow-left' : 'fa-arrow-right'}`}></i></span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </section>
 
-            {/* Featured Products */}
-            <section className="py-24" style={{backgroundColor: '#f2ede9'}}>
-              <div className="max-w-7xl mx-auto px-6">
-                <div className="flex justify-between items-end mb-12">
+            <section className="py-24 bg-[#f2ede9]">
+              <div className="max-w-7xl mx-auto px-6 lg:px-8">
+                <div className="flex justify-between items-end mb-16">
                   <div>
-                    <h2 className="font-headline text-4xl mb-2" style={{color: colors.onSurface}}>الأكثر طلباً</h2>
-                    <p style={{color: colors.onSurfaceVariant}}>قطع مميزة نالت إعجاب عملائنا</p>
+                    <h2 className="font-headline text-4xl text-[#34322f] mb-4">{t('best_sellers')}</h2>
+                    <p className="text-[#615f5b]">{t('best_sellers_sub')}</p>
                   </div>
                 </div>
-                
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                  {storeData.products.slice(0, 4).map(prod => (
+                  {storeData.products?.slice(0, 4).map(prod => (
                     <div key={prod.id} className="group">
-                      <div className="bg-white rounded-[2rem] overflow-hidden mb-6 aspect-[4/5] relative soft-shadow border border-white">
+                      <div className="bg-[#ffffff] rounded-[2rem] overflow-hidden mb-6 aspect-[4/5] relative shadow-sm">
                         <img src={prod.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={prod.name} />
-                        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm p-2 rounded-full text-sm font-bold shadow-sm" style={{color: colors.primary}}>
-                           {prod.categoryName || 'مميز'}
-                        </div>
                       </div>
-                      <h4 className="font-headline text-lg font-bold mb-1" style={{color: colors.onSurface}}>{prod.name}</h4>
-                      <p className="font-bold text-lg mb-4" style={{color: colors.secondary}}>{prod.price}</p>
-                      <button onClick={() => { setSelectedProduct(prod.name); navigateTo('order'); }} className="w-full py-3.5 rounded-full text-white font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity" style={{backgroundColor: colors.primary}}>
-                        <i className="fa-solid fa-cart-plus"></i> أطلب الآن
+                      <h4 className="font-headline text-lg text-[#34322f] mb-1">{prod.name}</h4>
+                      <p className="text-[#7e572e] font-medium mb-4">{prod.price}</p>
+                      <button onClick={() => { setSelectedProduct(prod.name); navigateTo('order'); }} className="w-full py-3 bg-[#44674d] text-[#e8ffea] rounded-full hover:opacity-90 transition-opacity flex items-center justify-center gap-2 font-bold">
+                        <span className="material-symbols-outlined text-sm">add_shopping_cart</span> {t('order_product_btn')}
                       </button>
                     </div>
                   ))}
@@ -393,41 +559,43 @@ export default function App() {
           </div>
         )}
 
-
-        {/* ==================== CATEGORY VIEW ==================== */}
         {view === 'category' && activeCategory && (
           <div className="animate-[fadeIn_0.4s_ease-out] py-16 px-6 max-w-7xl mx-auto">
-            <button onClick={() => navigateTo('home')} className="flex items-center gap-2 font-bold mb-10 opacity-70 hover:opacity-100 transition-opacity" style={{color: colors.secondary}}>
-              <i className="fa-solid fa-arrow-right"></i> العودة للرئيسية
+            <button onClick={() => navigateTo('home')} className="flex items-center gap-2 font-bold mb-10 text-gray-400 hover:text-[#1F2937] transition-colors">
+              <i className={`fa-solid ${lang === 'ar' ? 'fa-arrow-right' : 'fa-arrow-left'}`}></i> {t('home_nav')}
             </button>
-            
-            <div className="bg-white rounded-[3rem] p-10 mb-16 flex flex-col md:flex-row items-center gap-10 soft-shadow border border-[#f8f3ef]">
-               <div className="w-full md:w-1/3 aspect-square rounded-[2rem] overflow-hidden">
-                 <img src={activeCategory.img} className="w-full h-full object-cover" alt={activeCategory.name} />
-               </div>
-               <div className="w-full md:w-2/3">
-                 <h1 className="font-headline text-5xl mb-4" style={{color: colors.primary}}>{activeCategory.name}</h1>
-                 <p className="text-xl leading-relaxed" style={{color: colors.onSurfaceVariant}}>{activeCategory.desc}. تصفح مجموعتنا الحصرية واطلب ما يناسب ذوقك الرفيع.</p>
-               </div>
+            <div className="mb-12 flex justify-between items-end border-b border-gray-100 pb-6">
+              <div>
+                <h1 className="font-headline text-4xl md:text-5xl font-extrabold text-[#1F2937] mb-3">{getCatName(activeCategory)}</h1>
+                <p className="text-gray-500 text-lg">{activeCategory.desc}</p>
+              </div>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {storeData.products.filter(p => p.categoryId === activeCategory.id).length === 0 ? (
-                 <div className="col-span-full py-20 text-center bg-white rounded-[2rem]">
-                    <i className="fa-solid fa-box-open text-6xl text-gray-200 mb-4"></i>
-                    <p className="text-xl font-bold text-gray-400">لا توجد منتجات حالياً، ولكن يمكنك طلب تصميم خاص!</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              {storeData.products?.filter(p => p.categoryId === activeCategory.id).length === 0 ? (
+                 <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border border-gray-100 soft-shadow">
+                    <i className="fa-solid fa-basket-shopping text-6xl text-gray-200 mb-6"></i>
+                    <p className="text-2xl font-bold text-gray-400">{t('no_products')}</p>
+                    <button onClick={() => { setSelectedProduct(null); navigateTo('order'); }} className="mt-6 px-8 py-3 bg-[#E2B4B8] text-white rounded-xl font-bold hover:bg-opacity-90 transition">{t('order_custom_cat')}</button>
                  </div>
               ) : (
-                storeData.products.filter(p => p.categoryId === activeCategory.id).map(prod => (
-                  <div key={prod.id} className="group">
-                    <div className="bg-white rounded-[2rem] overflow-hidden mb-6 aspect-[4/5] relative soft-shadow">
+                storeData.products?.filter(p => p.categoryId === activeCategory.id).map(prod => (
+                  <div key={prod.id} className="bg-white rounded-3xl p-3 soft-shadow border border-gray-50 flex flex-col h-full group">
+                    <div className="h-72 overflow-hidden rounded-2xl relative mb-5">
+                      <div className={`absolute top-3 ${lang === 'ar' ? 'right-3' : 'left-3'} z-10 px-3 py-1.5 rounded-lg text-xs font-bold backdrop-blur-md shadow-sm ${prod.status?.includes('متوفر') ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>
+                        {prod.status}
+                      </div>
                       <img src={prod.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={prod.name} />
                     </div>
-                    <h4 className="font-headline text-lg font-bold mb-1" style={{color: colors.onSurface}}>{prod.name}</h4>
-                    <p className="font-bold text-lg mb-4" style={{color: colors.secondary}}>{prod.price}</p>
-                    <button onClick={() => { setSelectedProduct(prod.name); navigateTo('order'); }} className="w-full py-3.5 rounded-full font-bold flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all" style={{backgroundColor: colors.surfaceHigh, color: colors.primary}}>
-                      أطلب الآن
-                    </button>
+                    <div className="px-3 flex-grow flex flex-col">
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <h3 className="text-xl font-bold text-[#1F2937] leading-tight">{prod.name}</h3>
+                        <span className="text-[#E2B4B8] font-black text-lg whitespace-nowrap bg-[#FFF5F5] px-2 py-1 rounded-lg">{prod.price}</span>
+                      </div>
+                      <p className="text-gray-500 text-sm mb-6 flex-grow leading-relaxed">{prod.desc}</p>
+                      <button onClick={() => { setSelectedProduct(prod.name); navigateTo('order'); }} className="w-full py-3.5 bg-gray-50 text-[#1F2937] border border-gray-100 rounded-xl hover:bg-[#1F2937] hover:text-white hover:border-[#1F2937] transition-all font-bold flex justify-center items-center gap-2">
+                        <i className="fa-solid fa-bag-shopping"></i> <span>{t('order_product_btn')}</span>
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -435,54 +603,71 @@ export default function App() {
           </div>
         )}
 
-        {/* ==================== ORDER / CUSTOM DESIGN VIEW ==================== */}
+        {/* ==================== ORDER VIEW ==================== */}
         {view === 'order' && (
           <div className="animate-[fadeIn_0.4s_ease-out] py-16 px-6 max-w-3xl mx-auto">
-            <button onClick={() => navigateTo('home')} className="flex items-center gap-2 font-bold mb-10 opacity-70 hover:opacity-100 transition-opacity" style={{color: colors.secondary}}>
-              <i className="fa-solid fa-arrow-right"></i> العودة
+            <button onClick={() => navigateTo('home')} className="flex items-center gap-2 font-bold mb-10 text-gray-400 hover:text-[#1F2937] transition">
+              <i className={`fa-solid ${lang === 'ar' ? 'fa-arrow-right' : 'fa-arrow-left'}`}></i> {t('back')}
             </button>
-
-            <div className="bg-white rounded-[3rem] p-10 md:p-14 soft-shadow border border-[#f8f3ef] relative overflow-hidden">
-               <div className="absolute top-0 left-0 w-full h-3" style={{backgroundColor: colors.primaryContainer}}></div>
-               
-               <h1 className="font-headline text-4xl mb-4 text-center" style={{color: colors.onSurface}}>
-                 {selectedProduct ? 'إتمام طلبك' : 'تصميم قطعة مخصصة'}
-               </h1>
-               <p className="text-center mb-10" style={{color: colors.onSurfaceVariant}}>
-                 املأ التفاصيل أدناه وسنقوم بالتواصل معك لتأكيد الطلب والبدء في الحياكة.
-               </p>
-
-               {selectedProduct && (
-                 <div className="mb-8 p-6 rounded-2xl flex items-center gap-4" style={{backgroundColor: colors.surfaceLow}}>
-                   <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white shadow-sm text-2xl" style={{color: colors.secondary}}>
-                     <i className="fa-solid fa-bag-shopping"></i>
+            <div className="bg-white rounded-[3rem] shadow-[0_20px_50px_rgb(0,0,0,0.05)] border border-gray-100 overflow-hidden">
+               <div className="bg-[#1F2937] p-10 text-center text-white relative overflow-hidden">
+                 <CrochetLogo className="w-48 h-48 absolute -top-12 -right-12 text-white/5 pointer-events-none" />
+                 <h1 className="font-headline text-3xl md:text-4xl font-bold mb-3 relative z-10">
+                   {selectedProduct ? t('complete_order') : t('custom_order')}
+                 </h1>
+                 <p className="text-gray-400 font-medium relative z-10">
+                   {selectedProduct ? t('complete_desc') : t('custom_desc')}
+                 </p>
+               </div>
+               <div className="p-8 md:p-10">
+                 {selectedProduct && (
+                   <div className="mb-8 p-5 rounded-2xl flex items-center gap-4 bg-gray-50 border border-gray-100">
+                     <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-white shadow-sm text-2xl text-[#E2B4B8]">
+                       <i className="fa-solid fa-gift"></i>
+                     </div>
+                     <div>
+                       <p className="text-xs text-gray-400 font-bold mb-1">{t('selected_prod')}</p>
+                       <p className="text-xl font-bold text-[#1F2937]">{selectedProduct}</p>
+                     </div>
                    </div>
+                 )}
+                 <form onSubmit={submitOrder} className="space-y-6">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div>
+                       <label className="block font-bold text-gray-700 mb-2 text-sm">{t('full_name')}</label>
+                       <input type="text" name="name" required className="w-full px-5 py-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:bg-white focus:border-[#E2B4B8] transition-all font-medium" placeholder={t('name_placeholder')} />
+                     </div>
+                     <div>
+                       <label className="block font-bold text-gray-700 mb-2 text-sm">{t('phone')}</label>
+                       <input type="tel" name="phone" required dir="ltr" className="w-full px-5 py-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:bg-white focus:border-[#E2B4B8] transition-all font-bold tracking-widest text-right" placeholder="05XX XX XX XX" />
+                     </div>
+                   </div>
+
+                   {!selectedProduct && (
+                     <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 border-dashed">
+                        <label className="block font-bold text-gray-700 mb-2 text-sm"><i className="fa-solid fa-image text-[#E2B4B8] mr-2 rtl:ml-2"></i> {t('upload_img')}</label>
+                        <p className="text-xs text-gray-400 mb-4">{t('upload_desc')}</p>
+                        <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setCustomOrderImage)} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#FFF5F5] file:text-[#E2B4B8] hover:file:bg-[#E2B4B8] hover:file:text-white transition-all cursor-pointer" />
+                        {customOrderImage && (
+                          <div className="mt-4 relative inline-block">
+                             <img src={customOrderImage} alt="Preview" className="h-24 rounded-xl border border-gray-200 shadow-sm" />
+                             <button type="button" onClick={() => setCustomOrderImage(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md"><i className="fa-solid fa-xmark"></i></button>
+                          </div>
+                        )}
+                     </div>
+                   )}
+
                    <div>
-                     <p className="text-sm font-bold opacity-70">المنتج المختار:</p>
-                     <p className="text-xl font-headline font-bold">{selectedProduct}</p>
+                     <label className="block font-bold text-gray-700 mb-2 text-sm">{t('notes')} {selectedProduct && t('notes_opt')}</label>
+                     <textarea name="notes" rows="4" required={!selectedProduct} className="w-full px-5 py-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:bg-white focus:border-[#E2B4B8] transition-all resize-none font-medium text-sm" placeholder={selectedProduct ? t('notes_ph_prod') : t('notes_ph_cust')}></textarea>
                    </div>
-                 </div>
-               )}
-
-               <form onSubmit={submitOrder} className="space-y-6">
-                 <div>
-                   <label className="block font-bold mb-2 text-sm" style={{color: colors.secondary}}>الاسم الكامل</label>
-                   <input type="text" name="name" required className="w-full px-5 py-4 rounded-xl outline-none transition-all" style={{backgroundColor: colors.surfaceHigh, border: `2px solid transparent`}} onFocus={(e) => e.target.style.borderColor = colors.primaryContainer} onBlur={(e) => e.target.style.borderColor = 'transparent'} placeholder="أدخل اسمك الكريم" />
-                 </div>
-                 <div>
-                   <label className="block font-bold mb-2 text-sm" style={{color: colors.secondary}}>رقم الهاتف للتواصل (يفضل واتساب)</label>
-                   <input type="tel" name="phone" required dir="ltr" className="w-full px-5 py-4 rounded-xl outline-none transition-all text-right font-bold tracking-widest" style={{backgroundColor: colors.surfaceHigh, border: `2px solid transparent`}} onFocus={(e) => e.target.style.borderColor = colors.primaryContainer} onBlur={(e) => e.target.style.borderColor = 'transparent'} placeholder="05XX XX XX XX" />
-                 </div>
-                 <div>
-                   <label className="block font-bold mb-2 text-sm" style={{color: colors.secondary}}>ملاحظات أو تفاصيل التصميم {selectedProduct && '(اختياري)'}</label>
-                   <textarea name="notes" rows="5" required={!selectedProduct} className="w-full px-5 py-4 rounded-xl outline-none transition-all resize-none leading-relaxed" style={{backgroundColor: colors.surfaceHigh, border: `2px solid transparent`}} onFocus={(e) => e.target.style.borderColor = colors.primaryContainer} onBlur={(e) => e.target.style.borderColor = 'transparent'} placeholder={selectedProduct ? "أي تعديلات على الألوان أو المقاسات..." : "صِف لنا القطعة التي تحلم بها بالتفصيل..."}></textarea>
-                 </div>
-                 <div className="pt-4">
-                   <button type="submit" className="w-full py-4 rounded-xl font-bold text-white text-lg shadow-lg hover:-translate-y-1 transition-transform" style={{backgroundColor: colors.primary}}>
-                     تأكيد وإرسال الطلب
-                   </button>
-                 </div>
-               </form>
+                   <div className="pt-4">
+                     <button type="submit" className="w-full py-4 rounded-xl font-bold text-white text-lg shadow-lg hover:-translate-y-1 transition-all flex justify-center items-center gap-2" style={{backgroundColor: colors.primary}}>
+                       <i className="fa-solid fa-paper-plane"></i> {t('submit_order')}
+                     </button>
+                   </div>
+                 </form>
+               </div>
             </div>
           </div>
         )}
@@ -490,76 +675,80 @@ export default function App() {
         {/* ==================== ADMIN VIEW ==================== */}
         {view === 'admin' && (
           <div className="animate-[fadeIn_0.4s_ease-out] py-12 px-6 max-w-7xl mx-auto">
-            
-            <div className="bg-[#1a1c1a] text-[#ece7e3] p-10 rounded-[3rem] shadow-2xl mb-12 flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
-               <div className="absolute right-0 top-0 w-64 h-64 bg-[#44674d] rounded-full blur-[80px] opacity-20 pointer-events-none"></div>
+            <div className="bg-[#1F2937] text-white p-8 md:p-10 rounded-[3rem] shadow-xl mb-12 flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
+               <CrochetLogo className="absolute right-0 top-0 w-80 h-80 text-white/5 pointer-events-none -translate-y-1/4 translate-x-1/4" />
                <div className="relative z-10 flex items-center gap-6">
-                 <div className="w-16 h-16 bg-[#44674d] rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg">
+                 <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-[#E2B4B8] text-2xl shadow-lg backdrop-blur-md border border-white/10">
                    <i className="fa-solid fa-crown"></i>
                  </div>
                  <div>
-                   <h1 className="font-headline text-3xl font-bold mb-2">لوحة الإدارة</h1>
-                   <p className="opacity-70 font-medium">مرحباً هبة! من هنا يمكنك إدارة متجرك.</p>
+                   <h1 className="font-headline text-3xl font-bold mb-2">{t('admin_title')}</h1>
                  </div>
                </div>
-               <button onClick={() => navigateTo('home')} className="relative z-10 px-8 py-3 rounded-xl font-bold bg-white/10 hover:bg-white/20 transition-colors">
-                 تسجيل الخروج
+               <button onClick={() => navigateTo('home')} className="relative z-10 px-6 py-3 rounded-xl font-bold bg-white text-[#1F2937] hover:bg-gray-100 transition-colors shadow-lg">
+                 {t('logout')}
                </button>
             </div>
 
-            <div className="flex gap-4 mb-8">
-              <button onClick={() => setAdminTab('orders')} className={`px-8 py-3 rounded-2xl font-bold transition-all ${adminTab === 'orders' ? 'bg-white soft-shadow' : 'opacity-60 hover:opacity-100'}`} style={{color: adminTab === 'orders' ? colors.primary : colors.onSurface}}>
-                الطلبات <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-xs mr-2">{storeData.orders.length}</span>
+            <div className="flex space-x-2 rtl:space-x-reverse mb-8 bg-gray-100 p-1.5 rounded-2xl w-fit mx-auto sm:mx-0 overflow-x-auto max-w-full">
+              <button onClick={() => setAdminTab('orders')} className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center whitespace-nowrap ${adminTab === 'orders' ? 'bg-white text-[#1F2937] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                <i className="fa-solid fa-inbox mr-2 rtl:ml-2"></i> {t('admin_orders')}
+                {storeData.orders?.length > 0 && <span className="ml-2 rtl:mr-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{storeData.orders?.length}</span>}
               </button>
-              <button onClick={() => setAdminTab('products')} className={`px-8 py-3 rounded-2xl font-bold transition-all ${adminTab === 'products' ? 'bg-white soft-shadow' : 'opacity-60 hover:opacity-100'}`} style={{color: adminTab === 'products' ? colors.primary : colors.onSurface}}>
-                المنتجات والأقسام
+              <button onClick={() => {setAdminTab('products'); setEditingCategory(null); setEditingProduct(null);}} className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center whitespace-nowrap ${adminTab === 'products' ? 'bg-white text-[#1F2937] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                <i className="fa-solid fa-tags mr-2 rtl:ml-2"></i> {t('admin_products')}
               </button>
             </div>
 
-            {/* Admin: Orders Tab */}
+            {/* Admin: Orders */}
             {adminTab === 'orders' && (
               <div className="grid gap-6">
-                {storeData.orders.length === 0 ? (
-                  <div className="bg-white rounded-[3rem] p-20 text-center border border-[#f8f3ef]">
-                    <p className="text-xl font-bold opacity-50">لا توجد طلبات جديدة.</p>
+                {storeData.orders?.length === 0 ? (
+                  <div className="bg-white rounded-[3rem] p-20 text-center border border-gray-100 soft-shadow">
+                    <i className="fa-solid fa-clipboard-check text-6xl text-gray-200 mb-4"></i>
+                    <p className="text-xl font-bold text-gray-400">لا توجد طلبات جديدة.</p>
                   </div>
                 ) : (
-                  storeData.orders.map(order => (
-                    <div key={order.id} className="bg-white rounded-[2rem] p-8 soft-shadow border border-[#f8f3ef] flex flex-col md:flex-row gap-8 justify-between items-start">
-                      <div className="flex-grow space-y-4">
-                        <div className="flex items-center gap-4 border-b border-gray-100 pb-4">
-                          <span className="bg-[#c5eccc]/30 text-[#375941] px-3 py-1 rounded-lg text-sm font-bold">{order.type}</span>
-                          <span className="text-gray-400 text-sm font-medium">{order.date}</span>
+                  storeData.orders?.map(order => (
+                    <div key={order.id} className="bg-white rounded-[2rem] p-8 soft-shadow border border-gray-50 flex flex-col lg:flex-row gap-8 justify-between items-start group hover:border-gray-200 transition">
+                      <div className="flex-grow w-full">
+                        <div className="flex items-center gap-4 border-b border-gray-100 pb-4 mb-6">
+                          <span className={`px-4 py-1.5 rounded-lg text-xs font-bold ${order?.type?.includes('جاهز') ? 'bg-blue-50 text-blue-600' : 'bg-[#FFF5F5] text-[#7f535c]'}`}>
+                            {order?.type || 'غير محدد'}
+                          </span>
+                          <span className="text-sm text-gray-400 font-medium"><i className="fa-regular fa-clock"></i> {order.date}</span>
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-500 mb-1">اسم الزبون:</p>
-                          <p className="text-2xl font-bold font-headline">{order.customerName}</p>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="bg-[#fdf8f5] p-4 rounded-xl">
-                            <p className="text-xs text-gray-500 mb-1">المنتج / التصميم:</p>
-                            <p className="font-bold">{order.productName}</p>
+                        <h3 className="font-extrabold text-2xl text-[#1F2937] mb-6">{order.customerName}</h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="bg-gray-50 p-5 rounded-2xl">
+                            <p className="text-xs text-gray-400 font-bold mb-1">المنتج / التصميم:</p>
+                            <p className="font-bold text-base">{order.productName}</p>
                           </div>
-                          <div className="bg-[#fdf8f5] p-4 rounded-xl">
-                            <p className="text-xs text-gray-500 mb-1">الهاتف:</p>
-                            <p className="font-bold dir-ltr text-right">{order.phone}</p>
+                          <div className="bg-gray-50 p-5 rounded-2xl">
+                            <p className="text-xs text-gray-400 font-bold mb-1">الهاتف:</p>
+                            <p className="font-bold text-base dir-ltr text-right">{order.phone}</p>
                           </div>
-                        </div>
-                        <div className="bg-[#f8f3ef] p-5 rounded-xl border border-[#e7e2dd]">
-                          <p className="text-xs font-bold text-[#7e572e] mb-2">الملاحظات:</p>
-                          <p className="leading-relaxed text-sm">{order.notes || 'لا توجد.'}</p>
+                          
+                          {order.image && (
+                            <div className="md:col-span-2 bg-gray-50 p-5 rounded-2xl flex flex-col">
+                              <p className="text-xs text-gray-400 font-bold mb-2">صورة مرفقة من الزبون:</p>
+                              <img src={order.image} className="h-32 object-contain rounded-lg border border-gray-200 bg-white" alt="Request" />
+                            </div>
+                          )}
+
+                          <div className="md:col-span-2 bg-[#FFF5F5] p-5 rounded-2xl border border-[#E2B4B8]/30">
+                            <p className="text-xs font-black text-[#E2B4B8] mb-2 uppercase">الملاحظات والتفاصيل:</p>
+                            <p className="leading-relaxed text-gray-700">{order.notes || 'لا توجد ملاحظات.'}</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex md:flex-col gap-3 w-full md:w-auto">
-                         <a href={`https://wa.me/${order.phone.replace(/[^0-9]/g, '')}`} target="_blank" className="flex-1 text-center bg-green-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-600 transition">
-                           واتساب
+                      <div className="flex lg:flex-col gap-3 w-full lg:w-48 pt-4 lg:pt-0 lg:border-r lg:border-t-0 border-t border-gray-100 lg:pr-6 rtl:lg:pl-6 rtl:lg:pr-0">
+                         <a href={`https://wa.me/${order?.phone ? order.phone.replace(/[^0-9]/g, '') : ''}`} target="_blank" rel="noreferrer" className="flex-1 text-center bg-green-500 text-white px-4 py-3.5 rounded-xl font-bold hover:bg-green-600 transition flex items-center justify-center gap-2">
+                           <i className="fa-brands fa-whatsapp text-lg"></i> واتساب
                          </a>
-                         <button onClick={() => {
-                           if(window.confirm('حذف الطلب نهائياً؟')) {
-                             setStoreData(prev => ({...prev, orders: prev.orders.filter(o => o.id !== order.id)}));
-                           }
-                         }} className="flex-1 text-center bg-red-50 text-red-600 px-6 py-3 rounded-xl font-bold hover:bg-red-100 transition">
-                           حذف
+                         <button onClick={() => deleteItem('order', order.id)} className="flex-1 text-center bg-red-50 text-red-600 px-4 py-3.5 rounded-xl font-bold hover:bg-red-100 transition flex items-center justify-center gap-2">
+                           <i className="fa-solid fa-trash"></i> حذف
                          </button>
                       </div>
                     </div>
@@ -568,58 +757,142 @@ export default function App() {
               </div>
             )}
 
-            {/* Admin: Products Tab (Placeholder for Future Expansion) */}
+            {/* Admin: Products & Categories */}
             {adminTab === 'products' && (
-              <div className="bg-white rounded-[3rem] p-12 text-center border border-[#f8f3ef]">
-                 <i className="fa-solid fa-code text-6xl text-gray-200 mb-6"></i>
-                 <h2 className="text-2xl font-headline font-bold mb-2">إدارة المنتجات</h2>
-                 <p className="text-gray-500">تم تجهيز هذه الواجهة ليتم ربطها برمجياً لرفع وتعديل الصور والأسعار مستقبلاً.</p>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                {/* Edit Forms */}
+                <div className="space-y-8 lg:col-span-1">
+                  {/* Category Form */}
+                  <div className={`bg-white p-6 rounded-3xl shadow-sm border transition-all ${editingCategory ? 'border-blue-300 ring-4 ring-blue-50' : 'border-gray-100'}`}>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center"><i className={`fa-solid ${editingCategory ? 'fa-pen' : 'fa-folder-plus'}`}></i></div>
+                        <h2 className="text-lg font-bold">{editingCategory ? 'تعديل الفئة' : 'إضافة فئة جديدة'}</h2>
+                      </div>
+                      {editingCategory && <button onClick={() => {setEditingCategory(null); setCatForm({name_ar:'', name_fr:'', name_en:'', img:'', desc:''});}} className="text-xs text-gray-400 hover:text-gray-700 font-bold bg-gray-100 px-2 py-1 rounded">إلغاء التعديل</button>}
+                    </div>
+                    <form onSubmit={handleSaveCategory} className="space-y-3">
+                      <input type="text" required value={catForm.name_ar} onChange={e => setCatForm({...catForm, name_ar: e.target.value})} placeholder="الاسم بالعربية" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-400 text-sm font-medium" />
+                      <input type="text" required value={catForm.name_fr} onChange={e => setCatForm({...catForm, name_fr: e.target.value})} placeholder="الاسم بالفرنسية" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-400 text-sm font-medium" />
+                      <input type="text" required value={catForm.name_en} onChange={e => setCatForm({...catForm, name_en: e.target.value})} placeholder="الاسم بالإنجليزية" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-400 text-sm font-medium" />
+                      <textarea value={catForm.desc} onChange={e => setCatForm({...catForm, desc: e.target.value})} placeholder="وصف الفئة" rows="2" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-400 text-sm font-medium resize-none"></textarea>
+                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                        <label className="block text-xs font-bold text-gray-500 mb-2">صورة الفئة</label>
+                        <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, (base64) => setCatForm({...catForm, img: base64}))} className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 cursor-pointer" />
+                        {catForm.img && <img src={catForm.img} alt="Preview" className="h-16 mt-2 rounded object-cover" />}
+                      </div>
+                      <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 shadow-md text-sm">{editingCategory ? 'حفظ التعديلات' : 'إضافة الفئة'}</button>
+                    </form>
+                  </div>
+
+                  {/* Product Form */}
+                  <div className={`bg-white p-6 rounded-3xl shadow-sm border transition-all ${editingProduct ? 'border-[#E2B4B8] ring-4 ring-[#FFF5F5]' : 'border-gray-100'}`}>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#FFF5F5] text-[#E2B4B8] rounded-xl flex items-center justify-center"><i className={`fa-solid ${editingProduct ? 'fa-pen' : 'fa-plus'}`}></i></div>
+                        <h2 className="text-lg font-bold">{editingProduct ? 'تعديل المنتج' : 'إضافة منتج جديد'}</h2>
+                      </div>
+                      {editingProduct && <button onClick={() => {setEditingProduct(null); setProdForm({categoryId: '', name: '', price: '', desc: '', image: '', status: 'متوفر'});}} className="text-xs text-gray-400 hover:text-gray-700 font-bold bg-gray-100 px-2 py-1 rounded">إلغاء التعديل</button>}
+                    </div>
+                    <form onSubmit={handleSaveProduct} className="space-y-3">
+                      <select required value={prodForm.categoryId} onChange={e => setProdForm({...prodForm, categoryId: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-[#E2B4B8] text-sm font-medium">
+                        <option value="">-- اختر الفئة --</option>
+                        {storeData.categories?.map(c => <option key={c.id} value={c.id}>{c.name_ar}</option>)}
+                      </select>
+                      <input type="text" required value={prodForm.name} onChange={e => setProdForm({...prodForm, name: e.target.value})} placeholder="اسم المنتج" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-[#E2B4B8] text-sm font-medium" />
+                      <input type="text" required value={prodForm.price} onChange={e => setProdForm({...prodForm, price: e.target.value})} placeholder="السعر (مثال: 1500 دج)" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-[#E2B4B8] text-sm font-medium" />
+                      <textarea required value={prodForm.desc} onChange={e => setProdForm({...prodForm, desc: e.target.value})} placeholder="وصف المنتج" rows="3" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-[#E2B4B8] text-sm font-medium resize-none"></textarea>
+                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                        <label className="block text-xs font-bold text-gray-500 mb-2">صورة المنتج</label>
+                        <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, (base64) => setProdForm({...prodForm, image: base64}))} className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#FFF5F5] file:text-[#E2B4B8] hover:file:bg-[#E2B4B8] hover:file:text-white transition cursor-pointer" />
+                        {prodForm.image && <img src={prodForm.image} alt="Preview" className="h-16 mt-2 rounded object-cover" />}
+                      </div>
+                      <select value={prodForm.status} onChange={e => setProdForm({...prodForm, status: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-[#E2B4B8]">
+                        <option value="متوفر">متوفر فوراً</option>
+                        <option value="يصنع حسب الطلب">يصنع حسب الطلب</option>
+                      </select>
+                      <button type="submit" className="w-full bg-[#1F2937] text-white py-3 rounded-xl font-bold hover:bg-gray-800 shadow-md text-sm">{editingProduct ? 'حفظ التعديلات' : 'إضافة المنتج'}</button>
+                    </form>
+                  </div>
+                </div>
+
+                {/* Lists */}
+                <div className="lg:col-span-2 space-y-8">
+                  <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
+                    <h2 className="text-xl font-bold mb-6 flex items-center text-[#1F2937]"><i className="fa-solid fa-list-ul mr-2 rtl:ml-2 text-gray-400"></i> الفئات الحالية</h2>
+                    <div className="flex flex-col gap-3">
+                      {storeData.categories?.map(c => (
+                        <div key={c.id} className="bg-gray-50 border border-gray-100 p-4 rounded-2xl flex items-center justify-between group hover:border-gray-200 transition">
+                          <div className="flex items-center gap-4">
+                             <img src={c.img || 'https://via.placeholder.com/50'} className="w-12 h-12 rounded-lg object-cover" alt="" />
+                             <span className="font-bold text-[#1F2937]">{c.name_ar}</span>
+                          </div>
+                          <div className="flex gap-2">
+                             <button onClick={() => startEditingCategory(c)} className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition"><i className="fa-solid fa-pen text-sm"></i></button>
+                             <button onClick={() => deleteItem('category', c.id)} className="w-10 h-10 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition"><i className="fa-solid fa-trash-can text-sm"></i></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
+                    <h2 className="text-xl font-bold mb-6 flex items-center text-[#1F2937]"><i className="fa-solid fa-box-open mr-2 rtl:ml-2 text-gray-400"></i> المنتجات المضافة ({storeData.products?.length || 0})</h2>
+                    <div className="flex flex-col gap-3 max-h-[600px] overflow-y-auto pr-2">
+                      {storeData.products?.map(p => (
+                        <div key={p.id} className="flex flex-col sm:flex-row bg-gray-50 p-4 rounded-2xl border border-gray-100 items-start sm:items-center justify-between group hover:border-gray-200 transition gap-4">
+                          <div className="flex items-center gap-4 w-full sm:w-auto">
+                            <img src={p.image} className="w-16 h-16 rounded-xl object-cover shadow-sm" alt="" />
+                            <div>
+                              <h4 className="font-bold text-[#1F2937]">{p.name}</h4>
+                              <p className="text-sm text-[#E2B4B8] font-black">{p.price}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 w-full sm:w-auto justify-end">
+                            <button onClick={() => startEditingProduct(p)} className="w-10 h-10 rounded-xl bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center transition font-bold text-sm"><i className="fa-solid fa-pen"></i></button>
+                            <button onClick={() => deleteItem('product', p.id)} className="w-10 h-10 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition font-bold text-sm"><i className="fa-solid fa-trash-can"></i></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
               </div>
             )}
-
           </div>
         )}
 
       </main>
 
-      {/* --- Footer --- */}
-      <footer className="rounded-t-[3rem] mt-20" style={{backgroundColor: '#f2ede9'}}>
-        <div className="max-w-7xl mx-auto px-12 py-16 flex flex-col md:flex-row justify-between items-center gap-10">
+      <footer className="rounded-t-[3rem] mt-10 bg-[#f2ede9]">
+        <div className="max-w-7xl mx-auto px-8 md:px-12 py-16 flex flex-col md:flex-row justify-between items-center gap-10">
           <div className="text-center md:text-right">
-            <h3 className="text-2xl font-headline font-bold mb-4" style={{color: colors.secondary}}>Knotique By Heba</h3>
-            <p className="text-sm max-w-xs opacity-70 leading-relaxed" style={{color: colors.onSurface}}>
-                نهتم بأدق التفاصيل لنقدم لكم قطعاً يدوية تلامس القلب وتزين حياتكم بالدفء.
-            </p>
+            <h3 className="text-2xl font-headline font-bold mb-4 text-[#7e572e]">{t('footer_title')}</h3>
+            <p className="text-sm max-w-xs opacity-70 leading-relaxed text-[#34322f]">{t('footer_desc')}</p>
           </div>
           <div className="flex gap-4">
-            <a href="https://www.instagram.com/_knotiqueee?igsh=Z2ljaGM2Y2NhY2F2" target="_blank" className="w-12 h-12 flex items-center justify-center rounded-full text-white text-xl transition-transform hover:-translate-y-1 shadow-md" style={{backgroundColor: colors.primary}}>
+            <a href="https://www.instagram.com/_knotiqueee?igsh=Z2ljaGM2Y2NhY2F2" target="_blank" rel="noreferrer" className="w-12 h-12 flex items-center justify-center rounded-full text-white text-xl transition-transform hover:-translate-y-1 shadow-md bg-[#44674d]">
               <i className="fa-brands fa-instagram"></i>
             </a>
           </div>
         </div>
       </footer>
 
-      {/* --- Admin Login Modal --- */}
       {showAdminModal && (
         <div className="fixed inset-0 bg-[#34322f]/40 backdrop-blur-sm z-[100] flex items-center justify-center px-4 animate-[fadeIn_0.2s_ease-out]">
           <div className="bg-white p-10 rounded-[3rem] shadow-2xl max-w-sm w-full text-center">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{backgroundColor: colors.surfaceLow, color: colors.secondary}}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-[#f8f3ef] text-[#7e572e]">
               <i className="fa-solid fa-key text-3xl"></i>
             </div>
             <h3 className="text-2xl font-headline font-bold mb-2">دخول المدير</h3>
             <p className="text-sm text-gray-400 mb-8">أدخلي الرقم السري للمتابعة</p>
             <form onSubmit={handleAdminLogin}>
-              <input 
-                type="password" 
-                value={adminPwd}
-                onChange={(e) => {setAdminPwd(e.target.value); setAdminError(false);}}
-                className="w-full px-5 py-4 rounded-xl outline-none mb-4 text-center tracking-[1em] text-xl font-black bg-gray-50 focus:bg-white border-2 border-transparent focus:border-[#44674d] transition-all" 
-                placeholder="•••••"
-                autoFocus
-              />
+              <input type="password" value={adminPwd} onChange={(e) => {setAdminPwd(e.target.value); setAdminError(false);}} className="w-full px-5 py-4 rounded-xl outline-none mb-4 text-center tracking-[1em] text-xl font-black bg-gray-50 focus:bg-white border-2 border-transparent focus:border-[#44674d] transition-all" placeholder="•••••" autoFocus />
               {adminError && <p className="text-red-500 text-sm font-bold mb-4">عذراً، الرقم غير صحيح.</p>}
               <div className="flex gap-3">
-                <button type="submit" className="flex-[2] text-white py-4 rounded-xl font-bold shadow-lg hover:opacity-90 transition-opacity" style={{backgroundColor: colors.primary}}>تأكيد</button>
+                <button type="submit" className="flex-[2] text-white py-4 rounded-xl font-bold shadow-lg hover:opacity-90 transition-opacity bg-[#44674d]">تأكيد</button>
                 <button type="button" onClick={() => setShowAdminModal(false)} className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-xl font-bold hover:bg-gray-200">إلغاء</button>
               </div>
             </form>
